@@ -34,8 +34,10 @@ python start_mcp_services_upbit.py 2>&1 &
 MCP_PID=$!
 cd ..
 
-# Give services a moment to become reachable.
-sleep 10
+# Give services a moment to become reachable (configurable)
+STARTUP_SLEEP_SECONDS=${STARTUP_SLEEP_SECONDS:-10}
+echo "⏳ Startup sleep: waiting ${STARTUP_SLEEP_SECONDS}s for services..."
+sleep "${STARTUP_SLEEP_SECONDS}"
 
 CONFIG_PATH="${1:-configs/default_config.json}"
 echo "🤖 Running AI-Trader with config: ${CONFIG_PATH}"

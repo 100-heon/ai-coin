@@ -201,7 +201,16 @@ async def main(config_path=None):
     print(f"📅 Date range: {INIT_DATE} to {END_DATE}")
     print(f"🤖 Model list: {model_names}")
     print(f"⚙️  Agent config: max_steps={max_steps}, max_retries={max_retries}, base_delay={base_delay}, initial_cash={initial_cash}")
-                    
+
+    # Optional startup sleep to allow network/services to settle
+    try:
+        startup_sleep = int(os.getenv("STARTUP_SLEEP_SECONDS", "0") or "0")
+    except Exception:
+        startup_sleep = 0
+    if startup_sleep > 0:
+        print(f"⏳ Startup sleep: waiting {startup_sleep}s before fetching symbols…")
+        await asyncio.sleep(startup_sleep)
+
     # Choose symbol universe
     symbols_override = config.get("symbols")
     universe = os.getenv("UPBIT_UNIVERSE", config.get("universe", "nasdaq100"))
@@ -218,23 +227,55 @@ async def main(config_path=None):
         symbol_universe = symbols_override
     else:
         u = universe.lower()
-        if u in ("upbit_all_krw", "upbit_all"):
-            # Prefer top by 24h traded value when requested
-            if top_by_24h and get_top_krw_symbols_by_24h_value is not None:
-                fetched = get_top_krw_symbols_by_24h_value(max_symbols if max_symbols > 0 else 20)
-            elif get_all_krw_symbols is not None:
-                fetched = get_all_krw_symbols(max_symbols=max_symbols if max_symbols > 0 else None)
-            else:
+        # Safe KRW fallback set (avoid NASDAQ fallback for crypto mode)
+        SAFE_KRW_FALLBACK = [
+            "BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "AVAX", "LINK", "MATIC", "TON"
+        ]
+        # Simple cache path for last successful KRW universe
+        cache_dir = Path(__file__).resolve().parent / "data" / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / "upbit_symbols.json"
+
+        def _read_cached_symbols() -> list:
+            try:
+                if cache_file.exists():
+                    with cache_file.open("r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        return data if isinstance(data, list) else []
+            except Exception:
+                return []
+            return []
+
+        def _write_cached_symbols(symbols: list) -> None:
+            try:
+                with cache_file.open("w", encoding="utf-8") as f:
+                    json.dump(symbols, f, ensure_ascii=False)
+            except Exception:
+                pass
+
+        if u in ("upbit_all_krw", "upbit_all", "upbit_krw"):
+            fetched: list = []
+            try:
+                if top_by_24h and get_top_krw_symbols_by_24h_value is not None:
+                    fetched = get_top_krw_symbols_by_24h_value(max_symbols if max_symbols > 0 else 20)
+                elif get_all_krw_symbols is not None:
+                    fetched = get_all_krw_symbols(max_symbols=max_symbols if max_symbols > 0 else None)
+            except Exception:
                 fetched = []
+
             if fetched:
                 symbol_universe = fetched
-            elif all_upbit_krw_symbols:
-                symbol_universe = all_upbit_krw_symbols
+                _write_cached_symbols(fetched)
             else:
-                symbol_universe = all_nasdaq_100_symbols
-        elif u == "upbit_krw" and all_upbit_krw_symbols:
-            symbol_universe = all_upbit_krw_symbols
+                cached = _read_cached_symbols()
+                if cached:
+                    symbol_universe = cached
+                elif all_upbit_krw_symbols:
+                    symbol_universe = all_upbit_krw_symbols
+                else:
+                    symbol_universe = SAFE_KRW_FALLBACK
         else:
+            # Non-crypto modes keep existing behavior
             symbol_universe = all_nasdaq_100_symbols
 
     # Debug: print current watchlist each run (does not affect LLM tokens)
