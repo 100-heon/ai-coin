@@ -46,7 +46,12 @@ Thinking standards:
 Notes:
 - You don't need to request user permission during operations, you can execute directly
 - You must execute operations by calling tools, directly output operations will not be accepted
- - Apply a trading fee of {fee_rate_pct}% to all buys and sells when computing cash usage and PnL.
+- Apply a trading fee of {fee_rate_pct}% to all buys and sells when computing cash usage and PnL.
+- When conviction is high based on your signals, you may use more aggressive sizing (e.g., allocate up to 10–20% of available cash per action) and consider adding on strength; otherwise stay conservative or do not trade.
+
+Reasoning summary (concise):
+- Provide a short "Rationale:" section (3–5 bullets) covering: core signals, portfolio/position sizing, and the exact action.
+- Keep output succinct (~6–8 lines) before the final stop token.
 
 Here is the information you need:
 

@@ -51,9 +51,23 @@ Notes:
 - Before outputting the finish token, you MUST have called get_balance and at least one price tool.
 - If KRW balance allows, place at least one small market order (e.g., 10,000 KRW buy) when momentum is positive; otherwise state "no trade" with clear reasoning.
 - Be explicit about amounts and whether orders are market or limit.
-- Be mindful of KRW balance and position sizes.
-- Trading fees: apply a {fee_rate_pct}% fee to each trade when sizing and estimating PnL. For market buy using KRW amount, leave a small buffer so fee does not cause over-spend.
+ - Be mindful of KRW balance and position sizes.
+ - Trading fees: apply a {fee_rate_pct}% fee to each trade when sizing and estimating PnL. For market buy using KRW amount, leave a small buffer so fee does not cause over-spend.
  - If get_balance returns avg_costs/realized_pnl, use avg_costs to compare with current prices and reason about profit/loss per holding.
+ - When signals are strong, you may act more aggressively: size entries up to 10–20% of available KRW per trade, allow up to two add-on buys on continuation, and prefer market entries; if signal is weak/uncertain, keep conservative sizing or no trade.
+
+Reasoning summary (concise):
+- Begin with a short "근거:" section (3–5 bullets max).
+- Include: (1) 핵심 시그널 요약(분봉 {bar_label} 기준 추세/이평/변동성), (2) 잔고·사이징/리스크(왜 그 금액인지), (3) 실행 요약(심볼·시장/지정가·수량).
+- Keep total output within ~6–8 lines before the final 결정/토큰.
+
+Detailed but concise report (no raw dumps):
+- 현재 보유 포지션(전부 표기, 수량>0만): 각 코인 한 줄로 "심볼: 수량, (약 X KRW)" 형식. 가능하면 평균가/현재가를 짧게 함께 표기하되 한 줄을 넘기지 마세요.
+- 주요 코인 시장 분석 ({bar_label} 기준): 관심 심볼 1~2개에 대해 현재가·일중 고저·당일 변화율·최근 캔들 변화(3~5줄).
+- 추세/레벨: 지지·저항, 이평선 상·하, 변동성/거래량 상태(3~5줄).
+- 현재 상황/리스크: 현금 잔고, 포지션 크기/분산, 진입/청산 조건 요약(2~3줄).
+- 마지막에 "결정:"으로 매수/매도/보류 결론을 한 줄로 제시(심볼·시장/지정가·수량 등 핵심만).
+- 전체 분량은 이전 예시보다 풍부하게 작성하되 과도하지 않게 12~18줄 내로 유지하세요.
 
 When you are done, output exactly this token on a final line:
 {STOP_SIGNAL}

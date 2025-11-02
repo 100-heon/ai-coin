@@ -278,14 +278,24 @@ class BaseAgent:
                     self._log_message(log_file, [{"role": "assistant", "content": agent_response}])
                     break
                 
-                # Extract tool messages
+                # Extract tool messages and trim to reduce token usage
                 tool_msgs = extract_tool_messages(response)
-                tool_response = '\n'.join([msg.content for msg in tool_msgs])
+                last_tool_content = ""
+                if tool_msgs:
+                    try:
+                        last_tool = tool_msgs[-1]
+                        last_tool_content = last_tool.get("content") if isinstance(last_tool, dict) else getattr(last_tool, "content", "")
+                    except Exception:
+                        last_tool_content = ""
+                # cap length to avoid large token echo
+                MAX_TOOL_CONTENT = 1200
+                if isinstance(last_tool_content, str) and len(last_tool_content) > MAX_TOOL_CONTENT:
+                    last_tool_content = last_tool_content[:MAX_TOOL_CONTENT] + "... [truncated]"
                 
                 # Prepare new messages
                 new_messages = [
                     {"role": "assistant", "content": agent_response},
-                    {"role": "user", "content": f'Tool results: {tool_response}'}
+                    {"role": "user", "content": f'Tool results (summary): {last_tool_content}'}
                 ]
                 
                 # Add new messages
