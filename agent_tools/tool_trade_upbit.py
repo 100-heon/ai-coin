@@ -8,7 +8,7 @@ import time
 import json
 import hashlib
 from urllib.parse import urlencode
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional
 
 import requests
 import jwt
@@ -120,34 +120,55 @@ def _submit_order(market: str, side: str, volume: str | None, price: str | None,
         return {"raw": resp.text}
 
 
-def _write_position_snapshot(signature: str, today_date: str) -> Dict[str, Any]:
+def _read_last_ext(signature: str) -> Tuple[Dict[str, float], Dict[str, float], float, int]:
+    """Return (positions, avg_costs, realized_pnl, max_id) from last position record, or defaults."""
+    position_file_path = os.path.join(project_root, "data", "agent_data", signature, "position", "position.jsonl")
+    positions: Dict[str, float] = {}
+    avg_costs: Dict[str, float] = {}
+    realized_pnl: float = 0.0
+    max_id = -1
+    if not os.path.exists(position_file_path):
+        return positions, avg_costs, realized_pnl, max_id
     try:
-        positions = _accounts()
-    except Exception as e:
-        return {"error": f"Failed to fetch accounts: {e}"}
+        with open(position_file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                doc = json.loads(line)
+                current_id = int(doc.get("id", -1))
+                if current_id > max_id:
+                    max_id = current_id
+                    positions = doc.get("positions", {}) or {}
+                    avg_costs = doc.get("avg_costs", {}) or {}
+                    realized_pnl = float(doc.get("realized_pnl", 0.0) or 0.0)
+    except Exception:
+        pass
+    return positions, avg_costs, realized_pnl, max_id
 
+
+def _write_position_snapshot(
+    signature: str,
+    today_date: str,
+    positions: Dict[str, float],
+    this_action: Dict[str, Any],
+    avg_costs: Optional[Dict[str, float]] = None,
+    realized_pnl: Optional[float] = None,
+) -> Dict[str, Any]:
     position_file_path = os.path.join(project_root, "data", "agent_data", signature, "position", "position.jsonl")
     os.makedirs(os.path.dirname(position_file_path), exist_ok=True)
 
-    max_id = -1
-    if os.path.exists(position_file_path):
-        try:
-            with open(position_file_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    if not line.strip():
-                        continue
-                    doc = json.loads(line)
-                    if doc.get("date") == today_date:
-                        max_id = max(max_id, int(doc.get("id", -1)))
-        except Exception:
-            pass
-
+    _, _, _, last_id = _read_last_ext(signature)
     record = {
         "date": today_date,
-        "id": max_id + 1,
-        "this_action": {"action": "snapshot", "symbol": "", "amount": 0},
+        "id": last_id + 1,
+        "this_action": this_action,
         "positions": positions,
     }
+    if isinstance(avg_costs, dict):
+        record["avg_costs"] = avg_costs
+    if isinstance(realized_pnl, (int, float)):
+        record["realized_pnl"] = realized_pnl
+
     with open(position_file_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
     return record
@@ -172,6 +193,12 @@ def buy(symbol: str, amount: float, price: float | None = None, market_order: bo
 
     market = _normalize_market(symbol)
 
+    # Pre-trade balances (to infer deltas and effective price)
+    try:
+        pre_bal = _accounts()
+    except Exception:
+        pre_bal = {}
+
     try:
         if market_order:
             if price is None:
@@ -184,24 +211,61 @@ def buy(symbol: str, amount: float, price: float | None = None, market_order: bo
     except Exception as e:
         return {"error": str(e)}
 
+    # Post-trade balances
+    try:
+        post_bal = _accounts()
+    except Exception:
+        post_bal = {}
+
     write_config_value("IF_TRADE", True)
-    snapshot = _write_position_snapshot(signature, today_date)
-    # Estimated fee/cost note (Upbit applies fees on execution; this is an estimate)
-    est_fee = None
-    est_total_cost = None
-    if market_order and price is not None:
-        try:
-            est_fee = float(price) * FEE_RATE
-            est_total_cost = float(price) + est_fee
-        except Exception:
-            pass
+
+    # Infer deltas and update avg costs (only if balances changed)
+    coin = symbol.strip().upper().split("-")[-1]
+    pre_qty = float(pre_bal.get(coin, 0.0) or 0.0)
+    post_qty = float(post_bal.get(coin, 0.0) or 0.0)
+    delta_qty = post_qty - pre_qty
+    pre_cash = float(pre_bal.get("CASH", 0.0) or 0.0)
+    post_cash = float(post_bal.get("CASH", 0.0) or 0.0)
+    delta_cash = post_cash - pre_cash  # expect negative on buy
+
+    prev_positions, prev_avg_costs, prev_realized, _ = _read_last_ext(signature)
+    avg_costs = dict(prev_avg_costs)
+    realized_pnl = float(prev_realized)
+
+    if delta_qty > 0 and delta_cash < 0:
+        trade_value_incl_fee = -delta_cash  # KRW spent including fee
+        effective_price = trade_value_incl_fee / delta_qty if delta_qty else 0.0
+        prev_avg = float(prev_avg_costs.get(coin, 0.0) or 0.0)
+        new_qty = post_qty
+        if new_qty > 0:
+            avg_costs[coin] = (prev_avg * pre_qty + effective_price * delta_qty) / new_qty
+        else:
+            avg_costs[coin] = effective_price
+
+    this_action = {
+        "action": "buy",
+        "symbol": coin,
+        "amount": float(amount) if amount is not None else None,
+        "market_order": bool(market_order),
+        "fee_rate": FEE_RATE,
+    }
+
+    snapshot = _write_position_snapshot(
+        signature,
+        today_date,
+        positions=post_bal or pre_bal,
+        this_action=this_action,
+        avg_costs=avg_costs if avg_costs else None,
+        realized_pnl=realized_pnl,
+    )
+
     return {
         "order_result": result,
         "snapshot": snapshot,
         "dry_run": DRY_RUN,
         "fee_rate": FEE_RATE,
-        "estimated_fee": est_fee,
-        "estimated_total_cost": est_total_cost,
+        "avg_costs": avg_costs if avg_costs else None,
+        "realized_pnl": realized_pnl,
     }
 
 
@@ -224,6 +288,12 @@ def sell(symbol: str, amount: float, price: float | None = None, market_order: b
 
     market = _normalize_market(symbol)
 
+    # Pre-trade balances
+    try:
+        pre_bal = _accounts()
+    except Exception:
+        pre_bal = {}
+
     try:
         if market_order:
             result = _submit_order(market, side="ask", volume=str(amount), price=None, ord_type="market")
@@ -234,36 +304,89 @@ def sell(symbol: str, amount: float, price: float | None = None, market_order: b
     except Exception as e:
         return {"error": str(e)}
 
+    # Post-trade balances
+    try:
+        post_bal = _accounts()
+    except Exception:
+        post_bal = {}
+
     write_config_value("IF_TRADE", True)
-    snapshot = _write_position_snapshot(signature, today_date)
-    # Estimated fee/proceeds (approximation)
-    est_fee = None
-    est_net_proceeds = None
-    if not market_order and price is not None:
-        try:
-            gross = float(price) * float(amount)
-            est_fee = gross * FEE_RATE
-            est_net_proceeds = gross - est_fee
-        except Exception:
-            pass
+
+    coin = symbol.strip().upper().split("-")[-1]
+    pre_qty = float(pre_bal.get(coin, 0.0) or 0.0)
+    post_qty = float(post_bal.get(coin, 0.0) or 0.0)
+    delta_qty = pre_qty - post_qty  # shares sold
+    pre_cash = float(pre_bal.get("CASH", 0.0) or 0.0)
+    post_cash = float(post_bal.get("CASH", 0.0) or 0.0)
+    delta_cash = post_cash - pre_cash  # expect positive on sell
+
+    prev_positions, prev_avg_costs, prev_realized, _ = _read_last_ext(signature)
+    avg_costs = dict(prev_avg_costs)
+    realized_pnl = float(prev_realized)
+
+    if delta_qty > 0 and delta_cash > 0:
+        proceeds_incl_fee = delta_cash
+        effective_price = proceeds_incl_fee / delta_qty if delta_qty else 0.0
+        prev_avg = float(prev_avg_costs.get(coin, 0.0) or 0.0)
+        # Realized PnL uses avg cost; proceeds already net of fees
+        realized_pnl += proceeds_incl_fee - prev_avg * delta_qty
+        # Update avg cost for remaining qty
+        if post_qty <= 0:
+            avg_costs[coin] = 0.0
+        else:
+            avg_costs[coin] = prev_avg  # unchanged for remaining
+
+    this_action = {
+        "action": "sell",
+        "symbol": coin,
+        "amount": float(amount) if amount is not None else None,
+        "market_order": bool(market_order),
+        "fee_rate": FEE_RATE,
+    }
+
+    snapshot = _write_position_snapshot(
+        signature,
+        today_date,
+        positions=post_bal or pre_bal,
+        this_action=this_action,
+        avg_costs=avg_costs if avg_costs else None,
+        realized_pnl=realized_pnl,
+    )
+
     return {
         "order_result": result,
         "snapshot": snapshot,
         "dry_run": DRY_RUN,
         "fee_rate": FEE_RATE,
-        "estimated_fee": est_fee,
-        "estimated_net_proceeds": est_net_proceeds,
+        "avg_costs": avg_costs if avg_costs else None,
+        "realized_pnl": realized_pnl,
     }
 
 
 @mcp.tool()
 def get_balance() -> Dict[str, Any]:
-    """Return account balances from Upbit. CASH corresponds to the quote currency balance (e.g., KRW)."""
+    """Return account balances from Upbit.
+
+    Returns
+    - balances: dict of coin amounts with CASH for KRW
+    - avg_costs: last recorded average costs per coin (if available)
+    - realized_pnl: cumulative realized PnL from local records (if available)
+    """
     try:
         balances = _accounts()
-        return balances
     except Exception as e:
         return {"error": str(e)}
+
+    try:
+        signature = get_config_value("SIGNATURE")
+        if signature:
+            _, avg_costs, realized_pnl, _ = _read_last_ext(signature)
+        else:
+            avg_costs, realized_pnl = {}, 0.0
+    except Exception:
+        avg_costs, realized_pnl = {}, 0.0
+
+    return {"balances": balances, "avg_costs": avg_costs, "realized_pnl": realized_pnl}
 
 
 if __name__ == "__main__":

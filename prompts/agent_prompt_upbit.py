@@ -53,6 +53,7 @@ Notes:
 - Be explicit about amounts and whether orders are market or limit.
 - Be mindful of KRW balance and position sizes.
 - Trading fees: apply a {fee_rate_pct}% fee to each trade when sizing and estimating PnL. For market buy using KRW amount, leave a small buffer so fee does not cause over-spend.
+ - If get_balance returns avg_costs/realized_pnl, use avg_costs to compare with current prices and reason about profit/loss per holding.
 
 When you are done, output exactly this token on a final line:
 {STOP_SIGNAL}
@@ -105,4 +106,3 @@ def get_agent_system_prompt_upbit(today_date: str, signature: str) -> str:
         bar_label=bar_label,
         fee_rate_pct=fee_rate_pct,
     )
-

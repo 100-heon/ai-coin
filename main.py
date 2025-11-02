@@ -237,6 +237,21 @@ async def main(config_path=None):
         else:
             symbol_universe = all_nasdaq_100_symbols
 
+    # Debug: print current watchlist each run (does not affect LLM tokens)
+    try:
+        watch_count = len(symbol_universe) if isinstance(symbol_universe, list) else 0
+        if isinstance(symbol_universe, list):
+            if watch_count <= 30:
+                names = ", ".join(symbol_universe)
+                print(f"👀 현재 top {watch_count} 코인 주시 중입니다: {names}")
+            else:
+                preview = ", ".join(symbol_universe[:10])
+                print(f"👀 현재 top {watch_count} 코인 주시 중입니다. 예: {preview} …")
+        else:
+            print("👀 현재 코인 워치리스트를 불러오지 못했습니다.")
+    except Exception:
+        pass
+
     for model_config in enabled_models:
         # Read basemodel and signature directly from configuration file
         model_name = model_config.get("name", "unknown")
