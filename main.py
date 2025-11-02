@@ -18,10 +18,11 @@ try:
 except Exception:
     all_upbit_krw_symbols = None
 try:
-    from tools.date_utils import latest_trading_date_kst, sleep_until_next_bar_kst
+    from tools.date_utils import latest_trading_date_kst, sleep_until_next_bar_kst, get_kst_today_str
 except Exception:
     latest_trading_date_kst = None
     sleep_until_next_bar_kst = None
+    get_kst_today_str = None
 
 
 def _resolve_bar_minutes_env(default: int = 60) -> int:
@@ -149,11 +150,19 @@ async def main(config_path=None):
 
     # Optional: use today's date (KST) for live mode
     use_today_flag = str(os.getenv("USE_TODAY", str(config.get("use_today", "false")))).lower() in ("1", "true", "yes")
-    if use_today_flag and latest_trading_date_kst is not None:
-        today_trading = latest_trading_date_kst(include_today=True)
-        INIT_DATE = today_trading
-        END_DATE = today_trading
-        print(f"📅 Using KST latest trading date: {today_trading}")
+    if use_today_flag:
+        include_weekends = str(os.getenv("INCLUDE_WEEKENDS", "false")).lower() in ("1", "true", "yes")
+        # If weekends are allowed (e.g., crypto), use calendar today in KST
+        if include_weekends and get_kst_today_str is not None:
+            today_kst = get_kst_today_str()
+            INIT_DATE = today_kst
+            END_DATE = today_kst
+            print(f"📅 Using KST calendar date (weekends allowed): {today_kst}")
+        elif latest_trading_date_kst is not None:
+            today_trading = latest_trading_date_kst(include_today=True)
+            INIT_DATE = today_trading
+            END_DATE = today_trading
+            print(f"📅 Using KST latest trading date: {today_trading}")
     
     # Environment variables can override dates in configuration file
     if os.getenv("INIT_DATE"):
