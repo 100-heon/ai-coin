@@ -29,11 +29,13 @@ LOG_DIR="${ROOT_DIR}/logs"
 mkdir -p "${LOG_DIR}"
 
 echo "🔧 Starting MCP services (Upbit)..."
-python agent_tools/start_mcp_services_upbit.py > "${LOG_DIR}/mcp.log" 2>&1 &
+cd agent_tools
+python start_mcp_services_upbit.py 2>&1 & 
 MCP_PID=$!
+cd ..
 
 # Give services a moment to become reachable.
-sleep 2
+sleep 10
 
 CONFIG_PATH="${1:-configs/default_config.json}"
 echo "🤖 Running AI-Trader with config: ${CONFIG_PATH}"
