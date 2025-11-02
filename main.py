@@ -293,13 +293,14 @@ async def main(config_path=None):
     except Exception:
         pass
 
-    # If Upbit universe, try to compute and print current equity and PnL (no LLM tokens, uses Upbit public API)
+    # If Upbit universe, optionally print current equity and PnL (disabled by default via PRINT_EQUITY_SUMMARY)
     try:
         is_upbit = universe.lower() in ("upbit_krw", "upbit_all_krw", "upbit_all")
     except Exception:
         is_upbit = False
 
-    if is_upbit:
+    print_equity = str(os.getenv("PRINT_EQUITY_SUMMARY", "false")).lower() in ("1", "true", "yes")
+    if is_upbit and print_equity:
         try:
             import requests
             from pathlib import Path
