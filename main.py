@@ -260,8 +260,6 @@ async def main(config_path=None):
 
     if is_upbit:
         try:
-            import os
-            import json
             import requests
             from pathlib import Path
 
