@@ -10,9 +10,9 @@
   "top_by_24h_value": true,
   "models": [
     {
-      "name": "deepseek-r1-3.1",
-      "basemodel": "deepseek-reasoner",
-      "signature": "deepseek-r1-3.1",
+      "name": "deepseek-chat-v3.1",
+      "basemodel": "deepseek-chat",
+      "signature": "deepseek-chat-v3.1",
       "enabled": true
     }
   ],
