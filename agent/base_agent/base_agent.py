@@ -241,7 +241,10 @@ class BaseAgent:
         # Update system prompt
         # Choose prompt based on mode
         if self.prompt_mode == "upbit" and get_agent_system_prompt_upbit is not None:
-            sys_prompt = get_agent_system_prompt_upbit(today_date, self.signature)
+            try:
+                sys_prompt = get_agent_system_prompt_upbit(today_date, self.signature, self.stock_symbols)
+            except TypeError:
+                sys_prompt = get_agent_system_prompt_upbit(today_date, self.signature)
         else:
             sys_prompt = get_agent_system_prompt(today_date, self.signature)
 
@@ -260,6 +263,9 @@ class BaseAgent:
         
         # Trading loop
         current_step = 0
+        recent_tool_summaries = []
+        MAX_TOOL_ITEMS = 5
+        MAX_TOOL_CONTENT = 400
         while current_step < self.max_steps:
             current_step += 1
             print(f"🔄 Step {current_step}/{self.max_steps}")
@@ -278,7 +284,7 @@ class BaseAgent:
                     self._log_message(log_file, [{"role": "assistant", "content": agent_response}])
                     break
                 
-                # Extract tool messages and trim to reduce token usage
+                # Extract tool messages and keep a short rolling summary (reduce token usage)
                 tool_msgs = extract_tool_messages(response)
                 last_tool_content = ""
                 if tool_msgs:
@@ -287,15 +293,18 @@ class BaseAgent:
                         last_tool_content = last_tool.get("content") if isinstance(last_tool, dict) else getattr(last_tool, "content", "")
                     except Exception:
                         last_tool_content = ""
-                # cap length to avoid large token echo
-                MAX_TOOL_CONTENT = 1200
                 if isinstance(last_tool_content, str) and len(last_tool_content) > MAX_TOOL_CONTENT:
                     last_tool_content = last_tool_content[:MAX_TOOL_CONTENT] + "... [truncated]"
+                if isinstance(last_tool_content, str) and last_tool_content:
+                    recent_tool_summaries.append(last_tool_content)
+                    if len(recent_tool_summaries) > MAX_TOOL_ITEMS:
+                        recent_tool_summaries = recent_tool_summaries[-MAX_TOOL_ITEMS:]
+                tool_response_summary = " | ".join(recent_tool_summaries)
                 
                 # Prepare new messages
                 new_messages = [
                     {"role": "assistant", "content": agent_response},
-                    {"role": "user", "content": f'Tool results (summary): {last_tool_content}'}
+                    {"role": "user", "content": f'Recent tool results (summary): {tool_response_summary}'}
                 ]
                 
                 # Add new messages

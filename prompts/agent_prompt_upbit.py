@@ -36,6 +36,9 @@ Important tools (names may be exposed via MCP):
 Symbols:
 - Use KRW market symbols, e.g. BTC (interpreted as KRW-BTC) or KRW-BTC explicitly.
 
+Current watchlist (cover all in your per-symbol summary):
+{watchlist}
+
 Process for each session (KST {date}, current session = {bar_label}):
 1) You MUST call get_balance() first to read available KRW and held coins.
 2) You MUST fetch price data before deciding:
@@ -69,6 +72,10 @@ Detailed but concise report (no raw dumps):
 - 마지막에 "결정:"으로 매수/매도/보류 결론을 한 줄로 제시(심볼·시장/지정가·수량 등 핵심만).
 - 전체 분량은 이전 예시보다 풍부하게 작성하되 과도하지 않게 12~18줄 내로 유지하세요.
 
+Per‑symbol requirement:
+- For all symbols in the watchlist above, output one‑line summaries (보유 0인 관심심볼도 포함). Keep each line compact.
+- Then add a compact action list: "SYM | Action(Buy/Hold/Sell) | Reason(<=12 words)".
+
 When you are done, output exactly this token on a final line:
 {STOP_SIGNAL}
 """
@@ -90,7 +97,7 @@ def _resolve_bar_minutes() -> int:
     return 10
 
 
-def get_agent_system_prompt_upbit(today_date: str, signature: str) -> str:
+def get_agent_system_prompt_upbit(today_date: str, signature: str, symbols: list | None = None) -> str:
     bar_minutes = _resolve_bar_minutes()
     bar_count_env = os.environ.get("UPBIT_BAR_COUNT")
     try:
@@ -112,6 +119,7 @@ def get_agent_system_prompt_upbit(today_date: str, signature: str) -> str:
         fee_rate = 0.0005
     fee_rate_pct = round(fee_rate * 100, 4)
 
+    watchlist = ", ".join(symbols) if isinstance(symbols, list) else ""
     return agent_system_prompt.format(
         date=today_date,
         STOP_SIGNAL=STOP_SIGNAL,
@@ -119,4 +127,5 @@ def get_agent_system_prompt_upbit(today_date: str, signature: str) -> str:
         bar_count=bar_count,
         bar_label=bar_label,
         fee_rate_pct=fee_rate_pct,
+        watchlist=watchlist,
     )
