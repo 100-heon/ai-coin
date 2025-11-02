@@ -252,6 +252,93 @@ async def main(config_path=None):
     except Exception:
         pass
 
+    # If Upbit universe, try to compute and print current equity and PnL (no LLM tokens, uses Upbit public API)
+    try:
+        is_upbit = universe.lower() in ("upbit_krw", "upbit_all_krw", "upbit_all")
+    except Exception:
+        is_upbit = False
+
+    if is_upbit:
+        try:
+            import os
+            import json
+            import requests
+            from pathlib import Path
+
+            # Read latest position record for this signature (if exists)
+            sig = enabled_models[0].get("signature", "") if enabled_models else ""
+            pos_file = Path(__file__).resolve().parent / "data" / "agent_data" / sig / "position" / "position.jsonl"
+            latest = None
+            if pos_file.exists():
+                with pos_file.open("r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            doc = json.loads(line)
+                            latest = doc
+                        except Exception:
+                            continue
+
+            if latest and isinstance(latest, dict):
+                positions = latest.get("positions", {}) or {}
+                avg_costs = latest.get("avg_costs", {}) or {}
+                realized_pnl = float(latest.get("realized_pnl", 0.0) or 0.0)
+
+                # Build markets list for coins we hold
+                coins = [k for k in positions.keys() if k not in ("CASH",) and isinstance(positions.get(k), (int, float)) and positions.get(k, 0) > 0]
+                markets = [f"KRW-{c}" for c in coins]
+                prices: dict[str, float] = {}
+                if markets:
+                    base = os.getenv("UPBIT_API_BASE", "https://api.upbit.com")
+                    url = f"{base}/v1/ticker"
+                    try:
+                        resp = requests.get(url, params={"markets": ",".join(markets)}, timeout=5)
+                        if resp.status_code == 200:
+                            for item in resp.json() if isinstance(resp.json(), list) else []:
+                                mkt = item.get("market", "")
+                                if mkt.startswith("KRW-"):
+                                    coin = mkt.split("-", 1)[1]
+                                    prices[coin] = float(item.get("trade_price") or 0.0)
+                    except Exception:
+                        pass
+
+                cash = float(positions.get("CASH", 0.0) or 0.0)
+                equity = cash
+                unreal = 0.0
+                for c in coins:
+                    qty = float(positions.get(c, 0.0) or 0.0)
+                    px = float(prices.get(c, 0.0) or 0.0)
+                    equity += qty * px
+                    avgc = float(avg_costs.get(c, 0.0) or 0.0)
+                    if qty > 0 and avgc > 0 and px > 0:
+                        unreal += (px - avgc) * qty
+
+                # Baseline for profit rate: initial cash from config
+                init_cash = float(agent_config.get("initial_cash", 10000.0) or 10000.0)
+                pnl_total = equity - init_cash
+                rate = (equity / init_cash - 1.0) * 100.0 if init_cash > 0 else 0.0
+                print(f"📊 현재 평가액: {equity:,.0f} KRW | 손익: {pnl_total:,.0f} KRW (수익률 {rate:.2f}%) | 실현손익 {realized_pnl:,.0f} KRW")
+
+                # Per-coin PnL similar to Upbit app (only non-zero holdings)
+                for c in coins:
+                    qty = float(positions.get(c, 0.0) or 0.0)
+                    if qty <= 0:
+                        continue
+                    px = float(prices.get(c, 0.0) or 0.0)
+                    avgc = float(avg_costs.get(c, 0.0) or 0.0)
+                    eval_val = qty * px
+                    cost_val = qty * avgc
+                    upl = eval_val - cost_val
+                    rate_c = ((px / avgc) - 1.0) * 100.0 if avgc > 0 and px > 0 else 0.0
+                    print(f"  • {c}: 수량 {qty:.6f}, 평균가 {avgc:,.0f}, 현재가 {px:,.0f}, 평가손익 {upl:,.0f} KRW ({rate_c:+.2f}%)")
+            else:
+                print("📊 현재 포지션 기록이 없어 평가액/수익률을 계산할 수 없습니다.")
+        except Exception:
+            # Soft-fail; keep running
+            pass
+
     for model_config in enabled_models:
         # Read basemodel and signature directly from configuration file
         model_name = model_config.get("name", "unknown")
