@@ -303,7 +303,6 @@ async def main(config_path=None):
     if is_upbit and print_equity:
         try:
             import requests
-            from pathlib import Path
 
             # Read latest position record for this signature (if exists)
             sig = enabled_models[0].get("signature", "") if enabled_models else ""
