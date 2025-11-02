@@ -5,9 +5,22 @@ from typing import Dict, List, Optional, Any
 # Add project root directory to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
-from tools.price_tools import get_yesterday_date, get_open_prices, get_yesterday_open_and_close_price, get_latest_position, get_yesterday_profit
+from tools.price_tools import (
+    get_yesterday_date,
+    get_open_prices,
+    get_yesterday_open_and_close_price,
+    get_latest_position,
+    get_yesterday_profit,
+)
 import json
-from tools.general_tools import get_config_value,write_config_value
+from tools.general_tools import get_config_value, write_config_value
+
+# Trading fee rate (e.g., 0.0005 == 0.05%)
+try:
+    FEE_RATE = float(os.environ.get("FEE_RATE", "0.0005"))
+except Exception:
+    FEE_RATE = 0.0005
+
 mcp = FastMCP("TradeTools")
 
 
@@ -67,23 +80,34 @@ def buy(symbol: str, amount: int) -> Dict[str, Any]:
         # Stock symbol does not exist or price data is missing, return error message
         return {"error": f"Symbol {symbol} not found! This action will not be allowed.", "symbol": symbol, "date": today_date}
 
-    # Step 4: Validate buy conditions
-    # Calculate cash required for purchase: stock price × buy quantity
+    # Step 4: Validate buy conditions (with fee)
+    # Total cost = price × amount × (1 + fee_rate)
+    gross_cost = (this_symbol_price or 0) * amount
+    fee_cost = gross_cost * FEE_RATE
+    total_cost = gross_cost + fee_cost
     try:
-        cash_left = current_position["CASH"] - this_symbol_price * amount
-    except Exception as e:
-        print(current_position, "CASH", this_symbol_price, amount)
+        cash_left = current_position.get("CASH", 0) - total_cost
+    except Exception:
+        cash_left = -1
 
-    # Check if cash balance is sufficient for purchase
+    # Check if cash balance is sufficient for purchase (after fee)
     if cash_left < 0:
         # Insufficient cash, return error message
-        return {"error": "Insufficient cash! This action will not be allowed.", "required_cash": this_symbol_price * amount, "cash_available": current_position.get("CASH", 0), "symbol": symbol, "date": today_date}
+        return {
+            "error": "Insufficient cash! This action will not be allowed.",
+            "required_cash": total_cost,
+            "gross_cost": gross_cost,
+            "estimated_fee": fee_cost,
+            "fee_rate": FEE_RATE,
+            "cash_available": current_position.get("CASH", 0),
+            "symbol": symbol,
+            "date": today_date,
+        }
     else:
         # Step 5: Execute buy operation, update position
         # Create a copy of current position to avoid directly modifying original data
         new_position = current_position.copy()
-        
-        # Decrease cash balance
+        # Decrease cash balance including fee
         new_position["CASH"] = cash_left
         
         # Increase stock position quantity
@@ -96,8 +120,22 @@ def buy(symbol: str, amount: int) -> Dict[str, Any]:
         position_file_path = os.path.join(project_root, "data", "agent_data", signature, "position", "position.jsonl")
         with open(position_file_path, "a") as f:
             # Write JSON format transaction record, containing date, operation ID, transaction details and updated position
-            print(f"Writing to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'buy','symbol':symbol,'amount':amount},'positions': new_position})}")
-            f.write(json.dumps({"date": today_date, "id": current_action_id + 1, "this_action":{"action":"buy","symbol":symbol,"amount":amount},"positions": new_position}) + "\n")
+            record = {
+                "date": today_date,
+                "id": current_action_id + 1,
+                "this_action": {
+                    "action": "buy",
+                    "symbol": symbol,
+                    "amount": amount,
+                    "price": this_symbol_price,
+                    "fee_rate": FEE_RATE,
+                    "fee": fee_cost,
+                    "total_cost": total_cost,
+                },
+                "positions": new_position,
+            }
+            print(f"Writing to position.jsonl: {json.dumps(record)}")
+            f.write(json.dumps(record) + "\n")
         # Step 7: Return updated position
         write_config_value("IF_TRADE", True)
         print("IF_TRADE", get_config_value("IF_TRADE"))
@@ -169,10 +207,13 @@ def sell(symbol: str, amount: int) -> Dict[str, Any]:
     
     # Decrease stock position quantity
     new_position[symbol] -= amount
-    
-    # Increase cash balance: sell price × sell quantity
+
+    # Increase cash balance: (sell price × amount) minus fee
+    gross_proceeds = (this_symbol_price or 0) * amount
+    fee_cost = gross_proceeds * FEE_RATE
+    net_proceeds = gross_proceeds - fee_cost
     # Use get method to ensure CASH field exists, default to 0 if not present
-    new_position["CASH"] = new_position.get("CASH", 0) + this_symbol_price * amount
+    new_position["CASH"] = new_position.get("CASH", 0) + net_proceeds
 
     # Step 6: Record transaction to position.jsonl file
     # Build file path: {project_root}/data/agent_data/{signature}/position/position.jsonl
@@ -181,8 +222,22 @@ def sell(symbol: str, amount: int) -> Dict[str, Any]:
     position_file_path = os.path.join(project_root, "data", "agent_data", signature, "position", "position.jsonl")
     with open(position_file_path, "a") as f:
         # Write JSON format transaction record, containing date, operation ID and updated position
-        print(f"Writing to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'sell','symbol':symbol,'amount':amount},'positions': new_position})}")
-        f.write(json.dumps({"date": today_date, "id": current_action_id + 1, "this_action":{"action":"sell","symbol":symbol,"amount":amount},"positions": new_position}) + "\n")
+        record = {
+            "date": today_date,
+            "id": current_action_id + 1,
+            "this_action": {
+                "action": "sell",
+                "symbol": symbol,
+                "amount": amount,
+                "price": this_symbol_price,
+                "fee_rate": FEE_RATE,
+                "fee": fee_cost,
+                "net_proceeds": net_proceeds,
+            },
+            "positions": new_position,
+        }
+        print(f"Writing to position.jsonl: {json.dumps(record)}")
+        f.write(json.dumps(record) + "\n")
 
     # Step 7: Return updated position
     write_config_value("IF_TRADE", True)

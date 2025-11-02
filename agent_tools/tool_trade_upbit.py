@@ -28,6 +28,10 @@ mcp = FastMCP("TradeTools")
 UPBIT_API_BASE = os.environ.get("UPBIT_API_BASE", "https://api.upbit.com")
 QUOTE_CCY = os.environ.get("UPBIT_QUOTE", "KRW").upper()
 DRY_RUN = os.environ.get("UPBIT_DRY_RUN", "true").lower() not in ("false", "0", "no")
+try:
+    FEE_RATE = float(os.environ.get("FEE_RATE", "0.0005"))  # 0.05% default
+except Exception:
+    FEE_RATE = 0.0005
 
 
 def _creds() -> Tuple[str, str]:
@@ -182,7 +186,23 @@ def buy(symbol: str, amount: float, price: float | None = None, market_order: bo
 
     write_config_value("IF_TRADE", True)
     snapshot = _write_position_snapshot(signature, today_date)
-    return {"order_result": result, "snapshot": snapshot, "dry_run": DRY_RUN}
+    # Estimated fee/cost note (Upbit applies fees on execution; this is an estimate)
+    est_fee = None
+    est_total_cost = None
+    if market_order and price is not None:
+        try:
+            est_fee = float(price) * FEE_RATE
+            est_total_cost = float(price) + est_fee
+        except Exception:
+            pass
+    return {
+        "order_result": result,
+        "snapshot": snapshot,
+        "dry_run": DRY_RUN,
+        "fee_rate": FEE_RATE,
+        "estimated_fee": est_fee,
+        "estimated_total_cost": est_total_cost,
+    }
 
 
 @mcp.tool()
@@ -216,7 +236,24 @@ def sell(symbol: str, amount: float, price: float | None = None, market_order: b
 
     write_config_value("IF_TRADE", True)
     snapshot = _write_position_snapshot(signature, today_date)
-    return {"order_result": result, "snapshot": snapshot, "dry_run": DRY_RUN}
+    # Estimated fee/proceeds (approximation)
+    est_fee = None
+    est_net_proceeds = None
+    if not market_order and price is not None:
+        try:
+            gross = float(price) * float(amount)
+            est_fee = gross * FEE_RATE
+            est_net_proceeds = gross - est_fee
+        except Exception:
+            pass
+    return {
+        "order_result": result,
+        "snapshot": snapshot,
+        "dry_run": DRY_RUN,
+        "fee_rate": FEE_RATE,
+        "estimated_fee": est_fee,
+        "estimated_net_proceeds": est_net_proceeds,
+    }
 
 
 @mcp.tool()

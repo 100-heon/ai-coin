@@ -46,6 +46,7 @@ Thinking standards:
 Notes:
 - You don't need to request user permission during operations, you can execute directly
 - You must execute operations by calling tools, directly output operations will not be accepted
+ - Apply a trading fee of {fee_rate_pct}% to all buys and sells when computing cash usage and PnL.
 
 Here is the information you need:
 
@@ -73,13 +74,20 @@ def get_agent_system_prompt(today_date: str, signature: str) -> str:
     today_buy_price = get_open_prices(today_date, all_nasdaq_100_symbols)
     today_init_position = get_today_init_position(today_date, signature)
     yesterday_profit = get_yesterday_profit(today_date, yesterday_buy_prices, yesterday_sell_prices, today_init_position)
+    # Fee rate for prompt (default 0.05%)
+    try:
+        fee_rate = float(os.environ.get("FEE_RATE", "0.0005"))
+    except Exception:
+        fee_rate = 0.0005
+    fee_rate_pct = round(fee_rate * 100, 4)
     return agent_system_prompt.format(
         date=today_date, 
         positions=today_init_position, 
         STOP_SIGNAL=STOP_SIGNAL,
         yesterday_close_price=yesterday_sell_prices,
         today_buy_price=today_buy_price,
-        yesterday_profit=yesterday_profit
+        yesterday_profit=yesterday_profit,
+        fee_rate_pct=fee_rate_pct
     )
 
 

@@ -1,10 +1,8 @@
 import os
 from dotenv import load_dotenv
+
 load_dotenv()
 
-from typing import List
-
-# 동일한 종료 신호 사용(기존 로직과 호환)
 STOP_SIGNAL = "<FINISH_SIGNAL>"
 
 
@@ -19,7 +17,7 @@ Decision summary style:
 - Include a clear one-line decision near the end that starts with "결정:".
 - Use intraday wording like "지금" or "현재 {bar_label} 기준" rather than "오늘".
 - Examples:
-  - 결정: 지금은 추가 매매 없이 보유 포지션 유지
+  - 결정: 지금은 추세가 약해 매매 없이 보유 유지
   - 결정: 현재 {bar_label} 기준 KRW-BTC 10,000 KRW 시장가 매수
 
 Goals:
@@ -54,6 +52,7 @@ Notes:
 - If KRW balance allows, place at least one small market order (e.g., 10,000 KRW buy) when momentum is positive; otherwise state "no trade" with clear reasoning.
 - Be explicit about amounts and whether orders are market or limit.
 - Be mindful of KRW balance and position sizes.
+- Trading fees: apply a {fee_rate_pct}% fee to each trade when sizing and estimating PnL. For market buy using KRW amount, leave a small buffer so fee does not cause over-spend.
 
 When you are done, output exactly this token on a final line:
 {STOP_SIGNAL}
@@ -77,13 +76,13 @@ def _resolve_bar_minutes() -> int:
 
 
 def get_agent_system_prompt_upbit(today_date: str, signature: str) -> str:
-    # signature is available if you want to format messages or write additional context in future
     bar_minutes = _resolve_bar_minutes()
     bar_count_env = os.environ.get("UPBIT_BAR_COUNT")
     try:
         bar_count = max(1, int(bar_count_env)) if bar_count_env and bar_count_env.isdigit() else 30
     except Exception:
         bar_count = 30
+
     # Build human-friendly bar label (e.g., "60분봉" or "4시간봉")
     if bar_minutes >= 60 and bar_minutes % 60 == 0:
         hours = bar_minutes // 60
@@ -91,10 +90,19 @@ def get_agent_system_prompt_upbit(today_date: str, signature: str) -> str:
     else:
         bar_label = f"{bar_minutes}분봉"
 
+    # Fee rate for prompt (default 0.05%)
+    try:
+        fee_rate = float(os.environ.get("FEE_RATE", "0.0005"))
+    except Exception:
+        fee_rate = 0.0005
+    fee_rate_pct = round(fee_rate * 100, 4)
+
     return agent_system_prompt.format(
         date=today_date,
         STOP_SIGNAL=STOP_SIGNAL,
         bar_minutes=bar_minutes,
         bar_count=bar_count,
         bar_label=bar_label,
+        fee_rate_pct=fee_rate_pct,
     )
+
