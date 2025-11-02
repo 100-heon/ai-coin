@@ -1,4 +1,5 @@
 {
+
   "agent_type": "BaseAgent",
   "date_range": {
     "init_date": "2025-10-01",
@@ -6,7 +7,7 @@
   },
   "use_today": true,
   "universe": "upbit_all_krw",
-  "max_symbols": 20,
+  "max_symbols": 15,
   "top_by_24h_value": true,
   "models": [
     {
@@ -17,7 +18,7 @@
     }
   ],
   "agent_config": {
-    "max_steps": 1,
+    "max_steps": 12,
     "max_retries": 3,
     "base_delay": 1.0,
     "initial_cash": 10000.0
