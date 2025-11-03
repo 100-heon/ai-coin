@@ -181,12 +181,12 @@ def _write_position_snapshot(
 
 
 @mcp.tool()
-def buy(symbol: str, amount: float, price: float | None = None, market_order: bool = True) -> Dict[str, Any]:
+def buy(symbol: str, amount: Optional[float] = None, price: float | None = None, market_order: bool = True) -> Dict[str, Any]:
     """Place a buy order on Upbit.
 
     Args:
         symbol: e.g. 'BTC' or 'KRW-BTC'. If no '-' is present, QUOTE_CCY is prefixed.
-        amount: coin amount to buy for market order; for limit order, this is the volume in coins.
+        amount: For limit orders, the volume in coins. Ignored for market buy when ord_type='price'.
         price: optional limit price (QUOTE_CCY). For market buy by KRW funds, set market_order=True and pass price as total KRW to spend.
         market_order: True for market order. Upbit uses ord_type 'price' for market buy (price=KRW amount), 'market' for market sell.
 

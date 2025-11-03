@@ -335,6 +335,16 @@ def add_no_trade_record(today_date: str, modelname: str):
     """
     save_item = {}
     current_position, current_action_id = get_latest_position(today_date, modelname)
+    # Try to refresh positions from live Upbit balances if possible
+    try:
+        # Lazy import to avoid heavy dependencies if not needed
+        from agent_tools.tool_trade_upbit import _accounts  # type: ignore
+        live_pos = _accounts()
+        if isinstance(live_pos, dict) and live_pos:
+            current_position = live_pos
+    except Exception:
+        # Fallback to last known snapshot
+        pass
     print(current_position, current_action_id)
     save_item["date"] = today_date
     save_item["id"] = current_action_id+1
