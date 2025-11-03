@@ -18,7 +18,7 @@
     }
   ],
   "agent_config": {
-    "max_steps": 12,
+    "max_steps": 1,
     "max_retries": 3,
     "base_delay": 1.0,
     "initial_cash": 10000.0
