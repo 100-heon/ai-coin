@@ -345,7 +345,7 @@ def add_no_trade_record(today_date: str, modelname: str):
     except Exception:
         # Fallback to last known snapshot
         pass
-    print(current_position, current_action_id)
+    # Debug print removed to avoid noisy stdout during no-trade path
     save_item["date"] = today_date
     save_item["id"] = current_action_id+1
     save_item["this_action"] = {"action":"no_trade","symbol":"","amount":0}
