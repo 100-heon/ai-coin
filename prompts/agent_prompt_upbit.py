@@ -28,6 +28,7 @@ Goals:
 Important tools (names may be exposed via MCP):
 - LocalPrices.get_price_local(symbol: str, date: str)  # Upbit daily OHLCV
 - LocalPrices.get_price_minutes(symbol: str, minutes: int=10, count: int=30, to: str|None=None)  # Upbit minute candles
+- LocalPrices.get_ticker_batch(symbols: list[str]|str)  # Fetch current price for many symbols at once (use watchlist)
 - TradeTools.get_balance()                            # Upbit balances (CASH=KRW)
 - TradeTools.buy(symbol: str, amount: float, price: float|None=None, market_order: bool=True)
 - TradeTools.sell(symbol: str, amount: float, price: float|None=None, market_order: bool=True)
@@ -39,10 +40,14 @@ Symbols:
 Current watchlist (cover all in your per-symbol summary):
 {watchlist}
 
+Prefetched ticker snapshot (KRW):
+{prefetched_tickers}
+
 Process for each session (KST {date}, current session = {bar_label}):
 1) You MUST call get_balance() first to read available KRW and held coins.
 2) You MUST fetch price data before deciding:
-   - Prefer intraday: call get_price_minutes(symbol, minutes={bar_minutes}, count={bar_count}) for top symbols of interest.
+   - First call get_ticker_batch() with the full watchlist to collect current prices for ALL symbols.
+   - Then, for top 3–5 symbols of interest, call get_price_minutes(symbol, minutes={bar_minutes}, count={bar_count}) for deeper context.
    - Optionally complement with get_price_local(symbol, "{date}") for daily context.
 3) Decide whether to buy/sell using market or limit orders.
    - Market buy: market_order=True and set price to the KRW amount to spend.
@@ -97,7 +102,7 @@ def _resolve_bar_minutes() -> int:
     return 10
 
 
-def get_agent_system_prompt_upbit(today_date: str, signature: str, symbols: list | None = None) -> str:
+def get_agent_system_prompt_upbit(today_date: str, signature: str, symbols: list | None = None, prefetched_tickers: str | None = None) -> str:
     bar_minutes = _resolve_bar_minutes()
     bar_count_env = os.environ.get("UPBIT_BAR_COUNT")
     try:
@@ -120,6 +125,7 @@ def get_agent_system_prompt_upbit(today_date: str, signature: str, symbols: list
     fee_rate_pct = round(fee_rate * 100, 4)
 
     watchlist = ", ".join(symbols) if isinstance(symbols, list) else ""
+    prefetched = prefetched_tickers or ""
     return agent_system_prompt.format(
         date=today_date,
         STOP_SIGNAL=STOP_SIGNAL,
@@ -128,4 +134,5 @@ def get_agent_system_prompt_upbit(today_date: str, signature: str, symbols: list
         bar_label=bar_label,
         fee_rate_pct=fee_rate_pct,
         watchlist=watchlist,
+        prefetched_tickers=prefetched,
     )

@@ -198,6 +198,67 @@ def get_price_minutes(symbol: str, minutes: int | None = None, count: int | None
     }
 
 
+@mcp.tool()
+def get_ticker_batch(symbols: List[str] | str) -> Dict[str, Any]:
+    """Fetch current ticker data for a list of KRW symbols in one call.
+
+    Args:
+        symbols: List of symbols like ["BTC","ETH","SOL"] or a comma-separated string.
+
+    Returns:
+        { "results": [ {symbol, market, trade_price, signed_change_rate, acc_trade_price_24h, status} ... ] }
+        If a symbol is not available in KRW market or request fails, status explains the reason.
+    """
+    # Normalize input to list[str]
+    if isinstance(symbols, str):
+        raw_list = [s.strip() for s in symbols.split(",") if s.strip()]
+    else:
+        raw_list = list(symbols or [])
+
+    markets: List[str] = []
+    for s in raw_list:
+        if not s:
+            continue
+        ms = s.strip().upper()
+        markets.append(ms if "-" in ms else f"{QUOTE_CCY}-{ms}")
+
+    results: List[Dict[str, Any]] = []
+    if not markets:
+        return {"results": results}
+
+    url = f"{UPBIT_API_BASE}/v1/ticker"
+    # batch up to 50 per request
+    for i in range(0, len(markets), 50):
+        batch = markets[i:i+50]
+        try:
+            resp = requests.get(url, params={"markets": ",".join(batch)}, timeout=10)
+            if resp.status_code != 200:
+                # mark all as error
+                for m in batch:
+                    sym = m.split("-", 1)[1] if "-" in m else m
+                    results.append({"symbol": sym, "market": m, "status": f"http_{resp.status_code}"})
+                continue
+            data = resp.json()
+            if isinstance(data, list):
+                for item in data:
+                    m = item.get("market", "")
+                    sym = m.split("-", 1)[1] if "-" in m else m
+                    results.append({
+                        "symbol": sym,
+                        "market": m,
+                        "trade_price": item.get("trade_price"),
+                        "signed_change_rate": item.get("signed_change_rate"),
+                        "acc_trade_price_24h": item.get("acc_trade_price_24h"),
+                        "status": "ok",
+                    })
+        except Exception:
+            for m in batch:
+                sym = m.split("-", 1)[1] if "-" in m else m
+                results.append({"symbol": sym, "market": m, "status": "error"})
+
+    return {"results": results}
+
+
 if __name__ == "__main__":
     port = int(os.getenv("GETPRICE_HTTP_PORT", "8003"))
     mcp.run(transport="streamable-http", port=port)
