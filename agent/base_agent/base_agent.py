@@ -483,15 +483,22 @@ class BaseAgent:
         """Get position summary"""
         if not os.path.exists(self.position_file):
             return {"error": "Position file does not exist"}
-        
+
         positions = []
-        with open(self.position_file, "r") as f:
+        with open(self.position_file, "r", encoding="utf-8") as f:
             for line in f:
-                positions.append(json.loads(line))
-        
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    positions.append(json.loads(line))
+                except json.JSONDecodeError:
+                    # Skip malformed/partial lines to avoid hard failure on summary
+                    continue
+
         if not positions:
             return {"error": "No position records"}
-        
+
         latest_position = positions[-1]
         return {
             "signature": self.signature,
