@@ -49,6 +49,11 @@ Current watchlist (reference only):
 Prefetched ticker snapshot (KRW):
 {prefetched_tickers}
 
+Position summary (mandatory):
+- get_balance() 결과의 balances에서 수량>0인 코인만 기준으로 현재 보유 현황을 작성하세요(CASH 제외).
+- 각 코인은 "심볼: 보유수량 (≈ 평가금액 KRW)" 형식으로 간단히 표기하세요. 평가금액은 get_ticker_batch 최신가 × 수량으로 계산합니다.
+- 과거 position.jsonl 등의 로컬 로그는 코인 "목록" 기준으로 사용하지 말고 avg_costs/realized_pnl 참고용으로만 활용하세요.
+
 Process for each session (KST {date}, current session = {bar_label}):
 1) 반드시 get_balance()로 KRW/보유 코인을 먼저 확인합니다.
 2) 의사결정 전 반드시 가격 데이터를 조회합니다.
@@ -65,6 +70,7 @@ Notes:
 - 종료 토큰을 출력하기 전에 최소 get_balance와 하나 이상의 가격 조회 도구를 호출해야 합니다.
 - 최종 "결정:" 라인에는 도구가 보고한 실제 집행 금액을 사용하세요(krw_spent/proceeds_krw → requested_krw/price).
 - "노 트레이드"라도 분석 섹션(근거 불릿 + 간단 시황)과 명시적 결정 라인(예: "결정: 보류(노 트레이드) — 이유: ...")을 반드시 출력하세요.
+- "현재 보유 현황"은 반드시 get_balance()의 balances(수량>0) 기준으로 작성하세요. 로컬 로그에 남은 과거 코인은 보유 목록에 포함하지 마세요.
 - 금액/주문방식(시장가/지정가)을 명확히 표기하세요.
 - 수수료는 {fee_rate_pct}%로 가정하여 사이징/PNL 계산에 반영하고, 시장가 매수 시 과지출 방지를 위해 소액 버퍼를 두세요.
 - avg_costs/realized_pnl 정보가 있으면 현재가와 비교해 보유별 손익 판단에 활용하세요.
@@ -138,4 +144,3 @@ def get_agent_system_prompt_upbit(today_date: str, signature: str, symbols: list
         watchlist=watchlist,
         prefetched_tickers=prefetched,
     )
-

@@ -423,7 +423,31 @@ def get_balance() -> Dict[str, Any]:
     except Exception:
         avg_costs, realized_pnl = {}, 0.0
 
-    return {"balances": balances, "avg_costs": avg_costs, "realized_pnl": realized_pnl}
+    # Convenience fields for LLMs
+    try:
+        cash = float(balances.get("CASH", 0.0) or 0.0)
+    except Exception:
+        cash = 0.0
+    held_coins = []
+    try:
+        for k, v in (balances or {}).items():
+            if k == "CASH":
+                continue
+            try:
+                if float(v or 0.0) > 0.0:
+                    held_coins.append(k)
+            except Exception:
+                continue
+    except Exception:
+        held_coins = []
+
+    return {
+        "balances": balances,
+        "cash": cash,
+        "held_coins": held_coins,
+        "avg_costs": avg_costs,
+        "realized_pnl": realized_pnl,
+    }
 
 
 if __name__ == "__main__":
