@@ -15,6 +15,10 @@ Language:
 
 Decision summary style:
 - Include a clear one-line decision near the end that starts with "결정:".
+- Always reflect the actual executed KRW from the latest tool result:
+  - Prefer snapshot.this_action.krw_spent (buy) or proceeds_krw (sell).
+  - If unavailable, fall back to requested_krw or the price parameter you passed to the tool.
+  - Do NOT restate a different amount than the tool output.
 - Use intraday wording like "지금" or "현재 {bar_label} 기준" rather than "오늘".
 - Examples:
   - 결정: 지금은 추세가 약해 매매 없이 보유 유지
@@ -57,6 +61,7 @@ Process for each session (KST {date}, current session = {bar_label}):
 Notes:
 - Do NOT output operations directly; always call tools.
 - Before outputting the finish token, you MUST have called get_balance and at least one price tool.
+- Ensure the final "결정:" line uses the executed KRW reported by the last trade tool output (krw_spent/proceeds_krw, else requested_krw/price).
 - If KRW balance allows, place at least one small market order (e.g., 10,000 KRW buy) when momentum is positive; otherwise state "no trade" with clear reasoning.
 - Be explicit about amounts and whether orders are market or limit.
  - Be mindful of KRW balance and position sizes.

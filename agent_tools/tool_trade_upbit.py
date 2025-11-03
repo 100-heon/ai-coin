@@ -33,6 +33,12 @@ try:
 except Exception:
     FEE_RATE = 0.0005
 
+# Optional guard: cap KRW per market buy (disabled when 0)
+try:
+    MAX_MARKET_BUY_KRW = float(os.environ.get("UPBIT_MAX_BUY_KRW", "0") or "0")
+except Exception:
+    MAX_MARKET_BUY_KRW = 0.0
+
 
 def _creds() -> Tuple[str, str]:
     access_key = os.environ.get("UPBIT_ACCESS_KEY")
@@ -203,7 +209,18 @@ def buy(symbol: str, amount: float, price: float | None = None, market_order: bo
         if market_order:
             if price is None:
                 return {"error": "For market buy, 'price' must be the KRW amount to spend"}
-            result = _submit_order(market, side="bid", volume=None, price=str(price), ord_type="price")
+            # Safety cap (if configured)
+            try:
+                req_krw = float(price)
+            except Exception:
+                return {"error": "price must be numeric KRW for market buy", "price": price}
+            if MAX_MARKET_BUY_KRW and req_krw > MAX_MARKET_BUY_KRW:
+                return {
+                    "error": "requested KRW exceeds UPBIT_MAX_BUY_KRW",
+                    "requested_krw": req_krw,
+                    "limit": MAX_MARKET_BUY_KRW,
+                }
+            result = _submit_order(market, side="bid", volume=None, price=str(req_krw), ord_type="price")
         else:
             if price is None:
                 return {"error": "Limit buy requires 'price'"}
@@ -232,9 +249,20 @@ def buy(symbol: str, amount: float, price: float | None = None, market_order: bo
     avg_costs = dict(prev_avg_costs)
     realized_pnl = float(prev_realized)
 
+    requested_krw = None
+    krw_spent = None
+    coin_delta = None
+    if market_order:
+        # For market buy, 'amount' is not used by the exchange; KRW is taken from 'price'.
+        try:
+            requested_krw = float(price) if price is not None else None
+        except Exception:
+            requested_krw = None
+
     if delta_qty > 0 and delta_cash < 0:
-        trade_value_incl_fee = -delta_cash  # KRW spent including fee
-        effective_price = trade_value_incl_fee / delta_qty if delta_qty else 0.0
+        krw_spent = -delta_cash  # KRW spent including fee
+        coin_delta = delta_qty
+        effective_price = krw_spent / delta_qty if delta_qty else 0.0
         prev_avg = float(prev_avg_costs.get(coin, 0.0) or 0.0)
         new_qty = post_qty
         if new_qty > 0:
@@ -245,8 +273,12 @@ def buy(symbol: str, amount: float, price: float | None = None, market_order: bo
     this_action = {
         "action": "buy",
         "symbol": coin,
-        "amount": float(amount) if amount is not None else None,
+        # For market orders, 'amount' is not meaningful; keep for compatibility, else None
+        "amount": (float(amount) if (amount is not None and not market_order) else None),
         "market_order": bool(market_order),
+        "requested_krw": requested_krw,
+        "krw_spent": krw_spent,
+        "coin_delta": coin_delta,
         "fee_rate": FEE_RATE,
     }
 
@@ -324,12 +356,15 @@ def sell(symbol: str, amount: float, price: float | None = None, market_order: b
     avg_costs = dict(prev_avg_costs)
     realized_pnl = float(prev_realized)
 
+    proceeds_krw = None
+    coin_delta = None
     if delta_qty > 0 and delta_cash > 0:
-        proceeds_incl_fee = delta_cash
-        effective_price = proceeds_incl_fee / delta_qty if delta_qty else 0.0
+        proceeds_krw = delta_cash
+        effective_price = proceeds_krw / delta_qty if delta_qty else 0.0
         prev_avg = float(prev_avg_costs.get(coin, 0.0) or 0.0)
         # Realized PnL uses avg cost; proceeds already net of fees
-        realized_pnl += proceeds_incl_fee - prev_avg * delta_qty
+        realized_pnl += proceeds_krw - prev_avg * delta_qty
+        coin_delta = delta_qty
         # Update avg cost for remaining qty
         if post_qty <= 0:
             avg_costs[coin] = 0.0
@@ -341,6 +376,8 @@ def sell(symbol: str, amount: float, price: float | None = None, market_order: b
         "symbol": coin,
         "amount": float(amount) if amount is not None else None,
         "market_order": bool(market_order),
+        "proceeds_krw": proceeds_krw,
+        "coin_delta": coin_delta,
         "fee_rate": FEE_RATE,
     }
 
