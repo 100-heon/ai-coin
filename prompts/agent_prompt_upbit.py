@@ -41,7 +41,7 @@ Important tools (names may be exposed via MCP):
 Symbols:
 - Use KRW market symbols, e.g. BTC (interpreted as KRW-BTC) or KRW-BTC explicitly.
 
-Current watchlist (cover all in your per-symbol summary):
+Current watchlist (reference only):
 {watchlist}
 
 Prefetched ticker snapshot (KRW):
@@ -70,6 +70,7 @@ Notes:
  - When signals are strong, you may act more aggressively: size entries up to 10–20% of available KRW per trade, allow up to two add-on buys on continuation, and prefer market entries; if signal is weak/uncertain, keep conservative sizing or no trade.
 
 Reasoning summary (concise):
+- You MUST include a short "근거:" section (2~3 bullets) immediately before the final 결정 line.
 - Begin with a short "근거:" section (3–5 bullets max).
 - Include: (1) 핵심 시그널 요약(분봉 {bar_label} 기준 추세/이평/변동성), (2) 잔고·사이징/리스크(왜 그 금액인지), (3) 실행 요약(심볼·시장/지정가·수량).
 - Keep total output within ~6–8 lines before the final 결정/토큰.
@@ -82,9 +83,10 @@ Detailed but concise report (no raw dumps):
 - 마지막에 "결정:"으로 매수/매도/보류 결론을 한 줄로 제시(심볼·시장/지정가·수량 등 핵심만).
 - 전체 분량은 이전 예시보다 풍부하게 작성하되 과도하지 않게 12~18줄 내로 유지하세요.
 
-Per‑symbol requirement:
-- For all symbols in the watchlist above, output one‑line summaries (보유 0인 관심심볼도 포함). Keep each line compact.
-- Then add a compact action list: "SYM | Action(Buy/Hold/Sell) | Reason(<=12 words)".
+Interest summary:
+- Output a single compact line listing key symbols only when helpful, e.g., "관심심볼: XRP, BTC, ETH, SOL, ...".
+- Do NOT print per‑symbol one‑line summaries for the whole watchlist unless explicitly requested.
+- Then add a compact action list for up to 3 symbols that you plan to act on or closely monitor: "SYM | Action(Buy/Hold/Sell) | Reason(<=12 words)".
 
 When you are done, output exactly this token on a final line:
 {STOP_SIGNAL}
