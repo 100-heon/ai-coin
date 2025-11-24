@@ -130,6 +130,10 @@ class BaseAgent:
         
     def _get_default_mcp_config(self) -> Dict[str, Dict[str, Any]]:
         """Get default MCP configuration"""
+        use_paper = str(os.getenv("PAPER_TRADING", "false")).lower() in ("1", "true", "yes")
+        trade_port = os.getenv("TRADE_HTTP_PORT", "8002")
+        if use_paper:
+            trade_port = os.getenv("TRADE_HTTP_PORT", os.getenv("PAPER_TRADE_HTTP_PORT", "8002"))
         return {
             "math": {
                 "transport": "streamable_http",
@@ -145,7 +149,7 @@ class BaseAgent:
             },
             "trade": {
                 "transport": "streamable_http",
-                "url": f"http://localhost:{os.getenv('TRADE_HTTP_PORT', '8002')}/mcp",
+                "url": f"http://localhost:{trade_port}/mcp",
             },
         }
     
