@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Coin Paper Trader</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --panel: #12182a;
+      --panel-2: #0e1423;
+      --accent: #6ae3ff;
+      --accent-2: #7cf29c;
+      --text: #e9eef7;
+      --muted: #8da2c0;
+      --danger: #ff6b6b;
+      --warn: #f6c744;
+      --card-shadow: 0 15px 40px rgba(0, 0, 0, 0.25);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(120% 120% at 10% 10%, rgba(108, 231, 255, 0.18), transparent 35%),
+                  radial-gradient(120% 120% at 90% 20%, rgba(124, 242, 156, 0.14), transparent 35%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 28px 32px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      font-size: 20px;
+    }
+    .logo-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: grid;
+      place-items: center;
+      color: #041018;
+      font-weight: 800;
+    }
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    select, button {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid #1f2a44;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #041018;
+      border: none;
+      transition: transform 0.08s ease, box-shadow 0.08s ease;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 20px rgba(106, 227, 255, 0.35);
+    }
+    main {
+      padding: 0 32px 36px;
+      display: grid;
+      gap: 16px;
+    }
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+    .grid.cards { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+    .card {
+      background: var(--panel);
+      border: 1px solid #1b253a;
+      border-radius: 16px;
+      padding: 16px 18px;
+      box-shadow: var(--card-shadow);
+    }
+    .card h3 {
+      margin: 0 0 6px;
+      font-size: 14px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    .metric {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .metric .value { font-size: 28px; font-weight: 700; }
+    .pill {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(106, 227, 255, 0.12);
+      color: var(--accent);
+    }
+    .pill.warn { color: #f6c744; background: rgba(246, 199, 68, 0.12); }
+    .pill.danger { color: var(--danger); background: rgba(255, 107, 107, 0.12); }
+    .profit-pos { color: #ff6b6b; font-weight: 700; }
+    .profit-neg { color: #6ab8ff; font-weight: 700; }
+    .panel {
+      background: var(--panel-2);
+      border: 1px solid #1b253a;
+      border-radius: 16px;
+      box-shadow: var(--card-shadow);
+      padding: 16px 18px 12px;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .panel-header h2 { margin: 0; font-size: 18px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 10px 8px;
+      text-align: left;
+      border-bottom: 1px solid #1c2438;
+      color: var(--text);
+    }
+    th { color: var(--muted); font-weight: 600; }
+    tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
+    .muted { color: var(--muted); }
+    .status-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #45e38a; display: inline-block; margin-right: 6px;
+    }
+    .hero {
+      background: linear-gradient(135deg, rgba(106,227,255,0.12), rgba(124,242,156,0.12));
+      border: 1px solid #1b253a;
+      border-radius: 16px;
+      padding: 16px 18px;
+      box-shadow: var(--card-shadow);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+    .hero h1 { margin: 0; font-size: 22px; }
+    .hero p { margin: 6px 0 0; color: var(--muted); }
+    .badge { background: rgba(255,255,255,0.08); padding: 4px 10px; border-radius: 999px; font-weight: 700; }
+    @media (max-width: 768px) {
+      header, main { padding: 16px; }
+      .panel-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <div class="logo-badge">AI</div>
+      <div>LLM 코인매매</div>
+      <span class="pill" id="status-pill"><span class="status-dot"></span>MCP Online</span>
+    </div>
+    <div class="controls">
+      <span class="pill" id="sig-pill">deepseek-chat-v3.1</span>
+      <button id="refresh-btn">새로고침</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div>
+        <h1>딥싴이 포트폴리오</h1>
+        <p>Upbit 시세 기반 1억 KRW 가상 거래</p>
+      </div>
+      <div class="badge" id="run-info">최근 업데이트: -</div>
+    </div>
+
+    <div class="grid cards" id="metric-cards">
+      <div class="card">
+        <h3>총자산 (Equity)</h3>
+        <div class="metric">
+          <span class="value" id="equity-value">-</span>
+          <span class="pill" id="equity-change">0%</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>현금 (KRW)</h3>
+        <div class="metric"><span class="value" id="cash-value">-</span></div>
+      </div>
+      <div class="card">
+        <h3>실현손익</h3>
+        <div class="metric">
+          <span class="value" id="realized-pnl">-</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>보유 코인 수</h3>
+        <div class="metric"><span class="value" id="holding-count">-</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Equity 곡선</h2>
+        <div class="muted" id="date-range"></div>
+      </div>
+      <canvas id="equity-chart" height="90"></canvas>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>보유 현황</h2>
+        <div class="muted" id="latest-date">-</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>심볼</th>
+              <th>수량</th>
+              <th>평단가</th>
+              <th>평가금액 (추정)</th>
+              <th>수익률</th>
+            </tr>
+          </thead>
+          <tbody id="holdings-body">
+            <tr><td colspan="4" class="muted">데이터가 없습니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const apiBase = window.location.origin;
+    let equityChart;
+
+    const fmtKRW = (n) => {
+      if (typeof n !== "number") return "-";
+      return n.toLocaleString("ko-KR", { maximumFractionDigits: 0 }) + "원";
+    };
+    const fmtPct = (n) => (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
+
+    async function fetchJSON(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      return res.json();
+    }
+
+    const signature = "deepseek-chat-v3.1";
+
+    function renderMetrics(portfolio, latest) {
+      const equityEl = document.getElementById("equity-value");
+      const equityChangeEl = document.getElementById("equity-change");
+      const cashEl = document.getElementById("cash-value");
+      const pnlEl = document.getElementById("realized-pnl");
+      const holdingCountEl = document.getElementById("holding-count");
+
+      if (!portfolio?.records?.length) {
+        equityEl.textContent = "-";
+        equityChangeEl.textContent = "-";
+        cashEl.textContent = "-";
+        pnlEl.textContent = "-";
+        holdingCountEl.textContent = "0";
+        return;
+      }
+      const rows = portfolio.records;
+      const last = rows[rows.length - 1];
+      const prev = rows.length > 1 ? rows[rows.length - 2] : null;
+      const equity = last.equity || 0;
+      const prevEq = prev ? prev.equity || 0 : equity;
+      const pct = prevEq === 0 ? 0 : ((equity / prevEq) - 1) * 100;
+      equityEl.textContent = fmtKRW(equity);
+      equityChangeEl.textContent = fmtPct(pct);
+      equityChangeEl.className = "pill " + (pct < 0 ? "danger" : "");
+      cashEl.textContent = fmtKRW(last.cash || 0);
+      pnlEl.textContent = fmtKRW(last.realized_pnl || 0);
+      const holdings = latest?.positions || {};
+      const count = Object.entries(holdings).filter(([k, v]) => k !== "CASH" && (v || 0) > 0).length;
+      holdingCountEl.textContent = count;
+      const dr = document.getElementById("date-range");
+      dr.textContent = `${rows[0].date} ~ ${last.date}`;
+      document.getElementById("run-info").textContent = `최근 업데이트: ${last.date}`;
+    }
+
+    function renderChart(portfolio) {
+      const ctx = document.getElementById("equity-chart").getContext("2d");
+      const rows = portfolio?.records || [];
+      const labels = rows.map(r => r.date);
+      const data = rows.map(r => r.equity);
+      if (equityChart) {
+        equityChart.data.labels = labels;
+        equityChart.data.datasets[0].data = data;
+        equityChart.update("none");
+        return;
+      }
+      equityChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            label: "Equity",
+            data,
+            fill: true,
+            borderColor: "#6ae3ff",
+            backgroundColor: "rgba(106, 227, 255, 0.12)",
+            tension: 0.25,
+            pointRadius: 0,
+          }]
+        },
+        options: {
+          responsive: true,
+          animation: false,
+          scales: {
+            x: { ticks: { color: "#8da2c0" }, grid: { color: "rgba(255,255,255,0.05)" } },
+            y: { ticks: { color: "#8da2c0" }, grid: { color: "rgba(255,255,255,0.05)" } },
+          },
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+
+    function renderHoldings(latest, holdingsResp) {
+      const tbody = document.getElementById("holdings-body");
+      tbody.innerHTML = "";
+      const rows = holdingsResp?.holdings || [];
+      if (!rows.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="5" class="muted">보유 코인이 없습니다.</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+      rows.forEach(({ symbol, quantity, avg_cost, last_price, value }) => {
+        const tr = document.createElement("tr");
+        const rate = avg_cost > 0 ? ((last_price / avg_cost - 1) * 100) : 0;
+        const signedRate = isFinite(rate) ? rate : 0;
+        const rateStr = `${signedRate >= 0 ? "+" : ""}${signedRate.toFixed(2)}%`;
+        const rateClass = rate >= 0 ? "profit-pos" : "profit-neg";
+        tr.innerHTML = `
+          <td>${symbol}</td>
+          <td>${Number(quantity).toFixed(6)}</td>
+          <td>${fmtKRW(avg_cost)}</td>
+          <td>${fmtKRW(value)} <span class="muted">(${fmtKRW(last_price)})</span></td>
+          <td class="${rateClass}">${rateStr}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadAll() {
+      const sig = signature;
+      try {
+        const [portfolio, latest, holdings] = await Promise.all([
+          fetchJSON(`${apiBase}/api/portfolio/${sig}`),
+          fetchJSON(`${apiBase}/api/positions/${sig}/latest`),
+          fetchJSON(`${apiBase}/api/holdings/${sig}`),
+        ]);
+        renderMetrics(portfolio, latest);
+        renderChart(portfolio);
+        renderHoldings(latest, holdings);
+        document.getElementById("latest-date").textContent = `Latest: ${latest?.date || "-"}`;
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    const REFRESH_MS = 1000; // 1초마다 자동 갱신
+
+    (async () => {
+      document.getElementById("sig-pill").textContent = signature;
+      await loadAll();
+      document.getElementById("refresh-btn").addEventListener("click", loadAll);
+      setInterval(loadAll, REFRESH_MS);
+    })();
+  </script>
+</body>
+</html>
