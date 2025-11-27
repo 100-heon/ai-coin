@@ -1,13 +1,7 @@
 # AI Coin Trader 대시보드
 
 이 프로젝트는 Upbit KRW 마켓을 대상으로 LLM 기반 트레이딩 에이전트를 운영하면서, 포지션/거래 로그를 FastAPI 대시보드로 시각화하는 코드입니다.  
-`main.py`로 에이전트를 돌리고, `main.sh`로 MCP 도구·대시보드·에이전트를 한 번에 실행할 수 있습니다.
 
-## 빠른 시작
-1. `.env`에서 API 키(DeepSeek, Upbit, Jina 등)와 실행 옵션을 설정합니다.
-2. `pip install -r requirements.txt` 로 의존성을 설치합니다.
-3. `bash main.sh` 를 실행하면 MCP 도구, uvicorn 대시보드, 에이전트가 순차적으로 구동됩니다.  
-   - 기본 포트: 운영 9000, 테스트 9200(핫리로드). 필요 시 `.env`에서 조정하세요.
 
 ## 주요 기능
 - **LLM 트레이딩**: `main.py`가 설정 파일(`configs/*.json`)을 읽어 모델별로 에이전트를 초기화하고, 포지션을 `data/agent_data/.../position/position.jsonl`에 기록합니다.
