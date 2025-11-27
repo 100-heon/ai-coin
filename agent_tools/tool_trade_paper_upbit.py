@@ -2,6 +2,7 @@ from fastmcp import FastMCP
 import os
 import json
 import time
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Tuple, Optional
 from urllib.parse import urlencode
 
@@ -94,6 +95,7 @@ def _write_snapshot(
     _, _, _, last_id = _read_last_ext(signature)
     record = {
         "date": today_date,
+        "timestamp": _current_timestamp_kst(),
         "id": last_id + 1,
         "this_action": this_action,
         "positions": positions,
@@ -105,6 +107,11 @@ def _write_snapshot(
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
     return record
+
+
+def _current_timestamp_kst() -> str:
+    kst = timezone(timedelta(hours=9))
+    return datetime.now(tz=kst).strftime("%Y-%m-%dT%H:%M:%S")
 
 
 def _bootstrap_if_missing(signature: str, today_date: str) -> None:

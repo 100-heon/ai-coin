@@ -105,3 +105,11 @@ def api_logs(signature: str, date: str, limit: Optional[int] = Query(default=Non
 def api_holdings(signature: str):
     data = data_access.holdings_with_prices(signature)
     return data
+
+
+@app.get("/api/actions/{signature}")
+def api_actions(signature: str, limit: Optional[int] = Query(default=None, ge=1, le=1000)):
+    rows = data_access.get_trade_actions(signature, limit=limit)
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"No trade actions for signature '{signature}'")
+    return {"signature": signature, "count": len(rows), "records": rows}

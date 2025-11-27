@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Coin Paper Trader</title>
+  <title>AI 코인 매매 시뮬레이터</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
@@ -135,6 +135,9 @@
       margin-bottom: 12px;
     }
     .panel-header h2 { margin: 0; font-size: 18px; }
+    .table-wrap {
+      overflow-x: auto;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -166,6 +169,80 @@
     }
     .hero h1 { margin: 0; font-size: 22px; }
     .hero p { margin: 6px 0 0; color: var(--muted); }
+    .footer-note {
+      text-align: right;
+      font-size: 12px;
+      color: rgba(233, 238, 247, 0.4);
+      margin-top: -4px;
+    }
+    .support-note {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px dashed #1f2a44;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: rgba(233, 238, 247, 0.6);
+      line-height: 1.3;
+    }
+    .support-note strong {
+      color: var(--accent);
+      font-size: 13px;
+    }
+    .md-heading {
+      font-weight: 700;
+      margin: 8px 0 4px;
+      color: var(--accent);
+    }
+    .md-bullet {
+      margin-left: 8px;
+      color: var(--text);
+    }
+    .watchlist-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+    }
+    .watch-pill {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 13px;
+      text-align: center;
+    }
+    .pie-chart {
+      max-width: 240px;
+      margin: 0 auto 10px;
+    }
+    .pie-legend {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .pie-legend span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pie-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .rationale-box {
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 12px;
+      border: 1px solid #1c2438;
+      padding: 12px 14px;
+      min-height: 96px;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: normal;
+      color: rgba(233, 238, 247, 0.8);
+    }
     .badge { background: rgba(255,255,255,0.08); padding: 4px 10px; border-radius: 999px; font-weight: 700; }
     @media (max-width: 768px) {
       header, main { padding: 16px; }
@@ -189,8 +266,8 @@
   <main>
     <div class="hero">
       <div>
-        <h1>딥싴이 포트폴리오</h1>
-        <p>Upbit 시세 기반 1억 KRW 가상 거래</p>
+        <h1>15분 봉 딥싴이 포트폴리오</h1>
+        <p>Upbit 거래량 top 15 종목 1억 KRW 가상 거래  </p>
       </div>
       <div class="badge" id="run-info">최근 업데이트: -</div>
     </div>
@@ -219,13 +296,6 @@
       </div>
     </div>
 
-    <div class="panel">
-      <div class="panel-header">
-        <h2>Equity 곡선</h2>
-        <div class="muted" id="date-range"></div>
-      </div>
-      <canvas id="equity-chart" height="90"></canvas>
-    </div>
 
     <div class="panel">
       <div class="panel-header">
@@ -240,15 +310,70 @@
               <th>수량</th>
               <th>평단가</th>
               <th>평가금액 (추정)</th>
+              <th>평가손익</th>
               <th>수익률</th>
             </tr>
           </thead>
           <tbody id="holdings-body">
-            <tr><td colspan="4" class="muted">데이터가 없습니다.</td></tr>
+            <tr><td colspan="6" class="muted">데이터가 없습니다.</td></tr>
           </tbody>
         </table>
       </div>
     </div>
+    <div class="panel">
+      <div class="panel-header">
+        <h2>포트폴리오 구성</h2>
+        <div class="muted">현금 + 보유 코인 비중</div>
+      </div>
+      <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:center;">
+        <canvas id="portfolio-chart" class="pie-chart" height="120"></canvas>
+        <div class="pie-legend" id="portfolio-legend"></div>
+      </div>
+      <div class="muted" id="portfolio-empty" style="display:none;">보유 데이터가 없습니다.</div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <h2>거래 내역</h2>
+        <div class="muted">최근 매수/매도 체결</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>체결시간</th>
+              <th>코인</th>
+              <th>액션</th>
+              <th>거래단가</th>
+              <th>수량</th>
+              <th>거래금액</th>
+            </tr>
+          </thead>
+          <tbody id="actions-body">
+            <tr><td colspan="6" class="muted">거래 기록이 없습니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <h2>현재 주시 중인 상위 15코인</h2>
+        <div class="muted" id="watchlist-info">-</div>
+      </div>
+      <div class="watchlist-grid" id="watchlist-grid"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <h2>결정 근거</h2>
+        <div class="muted" id="rationale-date">-</div>
+      </div>
+      <div class="rationale-box" id="rationale-box">로그에서 최신 결정을 불러오는 중...</div>
+    </div>
+    <div class="support-note" style="text-align:center;">
+      <a href="https://www.buymeacoffee.com/100_heon" target="_blank" rel="noreferrer">
+        <img src="https://img.buymeacoffee.com/button-api/?text=API 비용..감사합니다..!&emoji=💸&slug=100_heon&button_colour=5F7FFF&font_colour=ffffff&font_family=Poppins&outline_colour=000000&coffee_colour=FFDD00" alt="Buy me a coffee" />
+      </a>
+    </div>
+    <div class="footer-note">made by @100_heon</div>
   </main>
 
   <script>
@@ -259,12 +384,59 @@
       if (typeof n !== "number") return "-";
       return n.toLocaleString("ko-KR", { maximumFractionDigits: 0 }) + "원";
     };
+    const fmtSignedKRW = (n) => {
+      if (typeof n !== "number") return "-";
+      const sign = n > 0 ? "+" : n < 0 ? "-" : "";
+      const abs = Math.abs(n);
+      return `${sign}${abs.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}원`;
+    };
     const fmtPct = (n) => (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
+    const INITIAL_CASH_DEFAULT = 100000000;
+    let initialCashBase = INITIAL_CASH_DEFAULT;
+    let portfolioChart;
+    const formatTimestamp = (str) => {
+      if (!str) return "-";
+      const hasTime = str.includes("T");
+      const iso = hasTime ? str : `${str}T00:00:00`;
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return str;
+      if (!hasTime) {
+        return d.toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" });
+      }
+      return d.toLocaleString("ko-KR", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    };
 
     async function fetchJSON(url) {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       return res.json();
+    }
+
+    async function fetchLatestRationale(sig, date) {
+      if (!date) return null;
+      try {
+        const logs = await fetchJSON(`${apiBase}/api/logs/${sig}/${date}`);
+        const records = logs?.records || [];
+        for (let i = records.length - 1; i >= 0; i--) {
+          const entry = records[i];
+          const msgs = entry?.new_messages || [];
+          for (let j = msgs.length - 1; j >= 0; j--) {
+            const msg = msgs[j];
+            if (msg?.role === "assistant" && msg.content) {
+              return { content: msg.content, timestamp: entry?.timestamp };
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load rationale", err);
+      }
+      return null;
     }
 
     const signature = "deepseek-chat-v3.1";
@@ -282,109 +454,275 @@
         cashEl.textContent = "-";
         pnlEl.textContent = "-";
         holdingCountEl.textContent = "0";
+        document.getElementById("run-info").textContent = "최근 업데이트: -";
         return;
       }
       const rows = portfolio.records;
       const last = rows[rows.length - 1];
-      const prev = rows.length > 1 ? rows[rows.length - 2] : null;
-      const equity = last.equity || 0;
-      const prevEq = prev ? prev.equity || 0 : equity;
-      const pct = prevEq === 0 ? 0 : ((equity / prevEq) - 1) * 100;
-      equityEl.textContent = fmtKRW(equity);
-      equityChangeEl.textContent = fmtPct(pct);
-      equityChangeEl.className = "pill " + (pct < 0 ? "danger" : "");
+      pnlEl.textContent = fmtKRW(last.realized_pnl || 0);
       cashEl.textContent = fmtKRW(last.cash || 0);
       pnlEl.textContent = fmtKRW(last.realized_pnl || 0);
       const holdings = latest?.positions || {};
       const count = Object.entries(holdings).filter(([k, v]) => k !== "CASH" && (v || 0) > 0).length;
       holdingCountEl.textContent = count;
-      const dr = document.getElementById("date-range");
-      dr.textContent = `${rows[0].date} ~ ${last.date}`;
-      document.getElementById("run-info").textContent = `최근 업데이트: ${last.date}`;
+      const endLabel = formatLabelDate(last.timestamp || last.date);
+      document.getElementById("run-info").textContent = `최근 업데이트: ${endLabel}`;
     }
 
-    function renderChart(portfolio) {
-      const ctx = document.getElementById("equity-chart").getContext("2d");
-      const rows = portfolio?.records || [];
-      const labels = rows.map(r => r.date);
-      const data = rows.map(r => r.equity);
-      if (equityChart) {
-        equityChart.data.labels = labels;
-        equityChart.data.datasets[0].data = data;
-        equityChart.update("none");
-        return;
+    const formatLabelDate = (str) => {
+      if (!str) return "-";
+      const hasTime = str.includes("T");
+      const iso = hasTime ? str : `${str}T00:00:00`;
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return str;
+      if (!hasTime) {
+        return d.toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" });
       }
-      equityChart = new Chart(ctx, {
-        type: "line",
-        data: {
-          labels,
-          datasets: [{
-            label: "Equity",
-            data,
-            fill: true,
-            borderColor: "#6ae3ff",
-            backgroundColor: "rgba(106, 227, 255, 0.12)",
-            tension: 0.25,
-            pointRadius: 0,
-          }]
-        },
-        options: {
-          responsive: true,
-          animation: false,
-          scales: {
-            x: { ticks: { color: "#8da2c0" }, grid: { color: "rgba(255,255,255,0.05)" } },
-            y: { ticks: { color: "#8da2c0" }, grid: { color: "rgba(255,255,255,0.05)" } },
-          },
-          plugins: { legend: { display: false } }
-        }
+      return d.toLocaleString("ko-KR", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
       });
-    }
+    };
+
+    let lastHoldingsKey = "";
 
     function renderHoldings(latest, holdingsResp) {
       const tbody = document.getElementById("holdings-body");
-      tbody.innerHTML = "";
       const rows = holdingsResp?.holdings || [];
+      const key = JSON.stringify(rows.map(({ symbol, quantity, avg_cost, last_price }) => [symbol, quantity, avg_cost, last_price]));
+      if (key === lastHoldingsKey) {
+        return;
+      }
+      lastHoldingsKey = key;
+      tbody.innerHTML = "";
       if (!rows.length) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="5" class="muted">보유 코인이 없습니다.</td>`;
+        tr.innerHTML = `<td colspan="6" class="muted">보유 코인이 없습니다.</td>`;
         tbody.appendChild(tr);
         return;
       }
+      let totalValue = 0;
       rows.forEach(({ symbol, quantity, avg_cost, last_price, value }) => {
         const tr = document.createElement("tr");
-        const rate = avg_cost > 0 ? ((last_price / avg_cost - 1) * 100) : 0;
+        const qtyNum = Number(quantity) || 0;
+        const avgNum = Number(avg_cost) || 0;
+        const lastNum = Number(last_price) || 0;
+        const valNum = Number(value) || qtyNum * lastNum;
+        totalValue += valNum;
+        const rate = avgNum > 0 ? ((lastNum / avgNum - 1) * 100) : 0;
         const signedRate = isFinite(rate) ? rate : 0;
         const rateStr = `${signedRate >= 0 ? "+" : ""}${signedRate.toFixed(2)}%`;
         const rateClass = rate >= 0 ? "profit-pos" : "profit-neg";
+        const pnl = qtyNum * (lastNum - avgNum);
+        const pnlClass = pnl >= 0 ? "profit-pos" : "profit-neg";
         tr.innerHTML = `
           <td>${symbol}</td>
-          <td>${Number(quantity).toFixed(6)}</td>
-          <td>${fmtKRW(avg_cost)}</td>
-          <td>${fmtKRW(value)} <span class="muted">(${fmtKRW(last_price)})</span></td>
+          <td>${qtyNum.toFixed(6)}</td>
+          <td>${fmtKRW(avgNum)}</td>
+          <td>${fmtKRW(valNum)} <span class="muted">(${fmtKRW(lastNum)})</span></td>
+          <td class="${pnlClass}">${fmtSignedKRW(pnl)}</td>
           <td class="${rateClass}">${rateStr}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      if (typeof holdingsResp?.initial_cash === "number") {
+        initialCashBase = Number(holdingsResp.initial_cash);
+      }
+      renderRealtimeEquity(totalValue, holdingsResp?.positions?.CASH);
+      renderPortfolioChart(rows, holdingsResp?.positions?.CASH);
+    }
+
+    function renderRealtimeEquity(totalHoldingsValue, cash = 0) {
+      const equityEl = document.getElementById("equity-value");
+      const changeEl = document.getElementById("equity-change");
+      const cashEl = document.getElementById("cash-value");
+      const realtimeEquity = (Number(totalHoldingsValue) || 0) + (Number(cash) || 0);
+      equityEl.textContent = fmtKRW(realtimeEquity);
+      cashEl.textContent = fmtKRW(cash || 0);
+      const base = Number(initialCashBase) || INITIAL_CASH_DEFAULT;
+      const pct = base ? ((realtimeEquity / base) - 1) * 100 : 0;
+      changeEl.textContent = fmtPct(pct);
+      changeEl.className = "pill " + (pct < 0 ? "danger" : "profit-pos");
+    }
+
+    function renderPortfolioChart(holdingsRows = [], cash = 0) {
+      const ctxEl = document.getElementById("portfolio-chart");
+      const emptyEl = document.getElementById("portfolio-empty");
+      const legendEl = document.getElementById("portfolio-legend");
+      if (!ctxEl) return;
+      const slices = holdingsRows.map(item => ({
+        label: item.symbol || "-",
+        value: Number(item.value || 0),
+      }));
+      const cashVal = Number(cash || 0);
+      if (cashVal > 0) {
+        slices.push({ label: "CASH", value: cashVal });
+      }
+      const total = slices.reduce((acc, cur) => acc + cur.value, 0);
+      if (!total) {
+        if (portfolioChart) {
+          portfolioChart.destroy();
+          portfolioChart = null;
+        }
+        emptyEl.style.display = "block";
+        legendEl.style.display = "none";
+        ctxEl.style.display = "none";
+        return;
+      }
+      emptyEl.style.display = "none";
+      legendEl.style.display = "flex";
+      ctxEl.style.display = "block";
+      const colors = [
+        "#6ae3ff", "#7cf29c", "#ffb347", "#ff6b6b", "#a29bfe",
+        "#fd79a8", "#ffeaa7", "#00cec9", "#fab1a0", "#55efc4"
+      ];
+      const labels = slices.map(s => s.label);
+      const data = slices.map(s => s.value);
+      if (portfolioChart) {
+        portfolioChart.data.labels = labels;
+        portfolioChart.data.datasets[0].data = data;
+        portfolioChart.update("none");
+      } else {
+        portfolioChart = new Chart(ctxEl.getContext("2d"), {
+          type: "doughnut",
+          data: {
+            labels,
+            datasets: [{
+              data,
+              backgroundColor: labels.map((_, idx) => colors[idx % colors.length]),
+              borderWidth: 1,
+            }],
+          },
+          options: {
+            cutout: "55%",
+            plugins: {
+              legend: {
+                display: false,
+              },
+            },
+          },
+        });
+      }
+      legendEl.innerHTML = "";
+      labels.forEach((label, idx) => {
+        const pct = ((data[idx] / total) * 100) || 0;
+        const item = document.createElement("span");
+        item.innerHTML = `<span class="pie-dot" style="background:${colors[idx % colors.length]}"></span>${label}: ${pct.toFixed(0)}%`;
+        legendEl.appendChild(item);
+      });
+    }
+
+    function renderTradeHistory(actions = []) {
+      const tbody = document.getElementById("actions-body");
+      tbody.innerHTML = "";
+      if (!actions.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="6" class="muted">거래 기록이 없습니다.</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+      const rows = [...actions].reverse();
+      rows.forEach((a) => {
+        const tr = document.createElement("tr");
+        const krw = Number(a.krw_delta || 0);
+        const price = Number(a.fill_price || 0);
+        const amt = typeof a.amount === "number" ? a.amount : (a.amount || "-");
+        const actionLabel = a.action === "buy" ? "매수" : "매도";
+        tr.innerHTML = `
+          <td>${formatTimestamp(a.timestamp) || a.date || "-"}</td>
+          <td>${a.symbol || "-"}</td>
+          <td>${actionLabel}</td>
+          <td>${price ? fmtKRW(price) : "-"}</td>
+          <td>${amt}</td>
+          <td>${fmtKRW(Math.abs(krw || 0))}</td>
         `;
         tbody.appendChild(tr);
       });
     }
 
+    const escapeHtml = (str = "") => str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+    function toSimpleHtml(md = "") {
+      const filtered = md
+        .replace(/##\s*보유 현황[\s\S]*?(?=##|$)/g, "")
+        .replace(/##\s*시장 분석[\s\S]*?(?=##|$)/g, "");
+      let html = escapeHtml(filtered.trim());
+      html = html.replace(/(?:^|\n)## (.*)/g, (_, title) => `<div class="md-heading">${title}</div>`);
+      html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      html = html.replace(/\n- (.+)/g, (_, item) => `<div class="md-bullet">• ${item}</div>`);
+      html = html.replace(/\n\n/g, "<br/><br/>");
+      html = html.replace(/\n/g, "<br/>");
+      return html;
+    }
+
+    function renderRationale(text, timestamp) {
+      const box = document.getElementById("rationale-box");
+      const label = document.getElementById("rationale-date");
+      let display = "-";
+      if (timestamp) {
+        const d = new Date(timestamp);
+        if (!isNaN(d)) {
+          display = d.toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+        } else {
+          display = timestamp;
+        }
+      }
+      label.textContent = display;
+      if (text) {
+        const sanitized = toSimpleHtml(text).replace(/&lt;FINISH_SIGNAL&gt;/g, "");
+        box.innerHTML = sanitized;
+      } else {
+        box.innerHTML = "최근 결정을 불러오지 못했습니다. 에이전트 실행 기록을 확인해 주세요.";
+      }
+    }
+
+    function renderWatchlist(list = []) {
+      const grid = document.getElementById("watchlist-grid");
+      grid.innerHTML = "";
+      if (!list.length) {
+        grid.innerHTML = `<div class="muted">워치리스트 정보가 없습니다.</div>`;
+        return;
+      }
+      list.forEach((item) => {
+        const pill = document.createElement("div");
+        pill.className = "watch-pill";
+        pill.textContent = item;
+        grid.appendChild(pill);
+      });
+    }
+
+
     async function loadAll() {
       const sig = signature;
       try {
-        const [portfolio, latest, holdings] = await Promise.all([
+        const [portfolio, latest, holdings, actionsResp] = await Promise.all([
           fetchJSON(`${apiBase}/api/portfolio/${sig}`),
           fetchJSON(`${apiBase}/api/positions/${sig}/latest`),
           fetchJSON(`${apiBase}/api/holdings/${sig}`),
+          fetchJSON(`${apiBase}/api/actions/${sig}?limit=200`).catch(() => ({ records: [] })),
         ]);
         renderMetrics(portfolio, latest);
-        renderChart(portfolio);
         renderHoldings(latest, holdings);
         document.getElementById("latest-date").textContent = `Latest: ${latest?.date || "-"}`;
+        const watchlist = latest?.watchlist || [];
+        renderWatchlist(watchlist);
+        document.getElementById("watchlist-info").textContent = `총 ${watchlist.length}개`;
+        const rationale = await fetchLatestRationale(sig, latest?.date);
+        renderRationale(rationale?.content, rationale?.timestamp || latest?.date);
+        renderTradeHistory(actionsResp?.records || []);
       } catch (err) {
         console.error(err);
       }
     }
 
-    const REFRESH_MS = 1000; // 1초마다 자동 갱신
+    const REFRESH_MS = 5000; // 5초마다 자동 갱신
 
     (async () => {
       document.getElementById("sig-pill").textContent = signature;

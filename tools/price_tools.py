@@ -2,9 +2,9 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 import sys
 
 # 将项目根目录加入 Python 路径，便于从子目录直接运行本文件
@@ -260,6 +260,50 @@ def get_today_init_position(today_date: str, modelname: str) -> Dict[str, float]
     
     return latest_positions
 
+def _get_latest_record(today_date: str, modelname: str) -> Tuple[Dict[str, Any], int]:
+    """
+    Return the latest position record for given date (fallback to previous date).
+
+    Args:
+        today_date: Date string YYYY-MM-DD
+        modelname: Model name (used for file path)
+
+    Returns:
+        (record, id) where record is the JSON dict (may be empty) and id is int
+    """
+    base_dir = Path(__file__).resolve().parents[1]
+    position_file = base_dir / "data" / "agent_data" / modelname / "position" / "position.jsonl"
+    if not position_file.exists():
+        return {}, -1
+
+    def _scan_for_date(target_date: str) -> Tuple[Dict[str, Any], int]:
+        max_id = -1
+        latest_doc: Dict[str, Any] = {}
+        with position_file.open("r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    doc = json.loads(line)
+                except Exception:
+                    continue
+                if doc.get("date") != target_date:
+                    continue
+                current_id = doc.get("id", -1)
+                if current_id > max_id:
+                    max_id = current_id
+                    latest_doc = doc
+        return latest_doc, max_id
+
+    record, max_id = _scan_for_date(today_date)
+    if max_id >= 0:
+        return record, max_id
+
+    prev_date = get_yesterday_date(today_date)
+    record, max_id = _scan_for_date(prev_date)
+    return record, max_id
+
+
 def get_latest_position(today_date: str, modelname: str) -> Tuple[Dict[str, float], int]:
     """
     获取最新持仓。从 ../data/agent_data/{modelname}/position/position.jsonl 中读取。
@@ -275,53 +319,9 @@ def get_latest_position(today_date: str, modelname: str) -> Tuple[Dict[str, floa
           - positions: {symbol: weight} 的字典；若未找到任何记录，则为空字典。
           - max_id: 选中记录的最大 id；若未找到任何记录，则为 -1.
     """
-    base_dir = Path(__file__).resolve().parents[1]
-    position_file = base_dir / "data" / "agent_data" / modelname / "position" / "position.jsonl"
-
-    if not position_file.exists():
-        return {}, -1
-    
-    # 先尝试读取当天记录
-    max_id_today = -1
-    latest_positions_today: Dict[str, float] = {}
-    
-    with position_file.open("r", encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            try:
-                doc = json.loads(line)
-                if doc.get("date") == today_date:
-                    current_id = doc.get("id", -1)
-                    if current_id > max_id_today:
-                        max_id_today = current_id
-                        latest_positions_today = doc.get("positions", {})
-            except Exception:
-                continue
-    
-    if max_id_today >= 0:
-        return latest_positions_today, max_id_today
-
-    # 当天没有记录，则回退到上一个交易日
-    prev_date = get_yesterday_date(today_date)
-    max_id_prev = -1
-    latest_positions_prev: Dict[str, float] = {}
-
-    with position_file.open("r", encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            try:
-                doc = json.loads(line)
-                if doc.get("date") == prev_date:
-                    current_id = doc.get("id", -1)
-                    if current_id > max_id_prev:
-                        max_id_prev = current_id
-                        latest_positions_prev = doc.get("positions", {})
-            except Exception:
-                continue
-
-    return latest_positions_prev, max_id_prev
+    record, max_id = _get_latest_record(today_date, modelname)
+    positions = record.get("positions", {}) if isinstance(record, dict) else {}
+    return positions, max_id
 
 def add_no_trade_record(today_date: str, modelname: str):
     """
@@ -334,7 +334,10 @@ def add_no_trade_record(today_date: str, modelname: str):
         None
     """
     save_item = {}
-    current_position, current_action_id = get_latest_position(today_date, modelname)
+    record, current_action_id = _get_latest_record(today_date, modelname)
+    current_position = record.get("positions", {}) if isinstance(record, dict) else {}
+    current_avg_costs = record.get("avg_costs", {}) if isinstance(record, dict) else {}
+    current_realized = record.get("realized_pnl") if isinstance(record, dict) else None
     # Try to refresh positions from live Upbit balances if possible
     try:
         # Lazy import to avoid heavy dependencies if not needed
@@ -347,6 +350,7 @@ def add_no_trade_record(today_date: str, modelname: str):
         pass
     # Debug print removed to avoid noisy stdout during no-trade path
     save_item["date"] = today_date
+    save_item["timestamp"] = _current_timestamp_kst()
     save_item["id"] = current_action_id+1
     save_item["this_action"] = {"action":"no_trade","symbol":"","amount":0}
     
@@ -356,8 +360,16 @@ def add_no_trade_record(today_date: str, modelname: str):
     # Ensure directory exists
     position_file.parent.mkdir(parents=True, exist_ok=True)
     with position_file.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(save_item) + "\n")
+        if isinstance(current_avg_costs, dict) and current_avg_costs:
+            save_item["avg_costs"] = current_avg_costs
+        if isinstance(current_realized, (int, float)):
+            save_item["realized_pnl"] = current_realized
+        f.write(json.dumps(save_item, ensure_ascii=False) + "\n")
     return 
+
+def _current_timestamp_kst() -> str:
+    kst = timezone(timedelta(hours=9))
+    return datetime.now(tz=kst).strftime("%Y-%m-%dT%H:%M:%S")
 
 if __name__ == "__main__":
     today_date = get_config_value("TODAY_DATE")

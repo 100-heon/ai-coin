@@ -21,7 +21,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 sys.path.insert(0, project_root)
 
 from tools.general_tools import extract_conversation, extract_tool_messages, get_config_value, write_config_value
-from tools.price_tools import add_no_trade_record
+from tools.price_tools import add_no_trade_record, get_latest_position
 from prompts.agent_prompt import get_agent_system_prompt, STOP_SIGNAL
 try:
     from prompts.agent_prompt_upbit import get_agent_system_prompt_upbit
@@ -259,7 +259,11 @@ class BaseAgent:
         )
         
         # Initial user query
-        user_query = [{"role": "user", "content": f"Please analyze and update today's ({today_date}) positions."}]
+        ledger_snapshot = self._get_latest_position_snapshot(today_date)
+        ledger_text = ""
+        if ledger_snapshot:
+            ledger_text = f"\nCurrent ledger snapshot (from position log): {json.dumps(ledger_snapshot, ensure_ascii=False)}"
+        user_query = [{"role": "user", "content": f"Please analyze and update today's ({today_date}) positions.{ledger_text}"}]
         message = user_query.copy()
         
         # Log initial message
@@ -325,6 +329,16 @@ class BaseAgent:
         
         # Handle trading results
         await self._handle_trading_result(today_date)
+
+    def _get_latest_position_snapshot(self, today_date: str) -> Dict[str, Any]:
+        """Return latest recorded positions for prompt context."""
+        try:
+            positions, _ = get_latest_position(today_date, self.signature)
+            if isinstance(positions, dict):
+                return positions
+        except Exception as exc:
+            print(f"⚠️  Unable to load latest position snapshot: {exc}")
+        return {}
     
     async def _handle_trading_result(self, today_date: str) -> None:
         """Handle trading results"""

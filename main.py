@@ -223,6 +223,8 @@ async def main(config_path=None):
     top_by_24h_env = os.getenv("UPBIT_TOP_BY_24H", str(config.get("top_by_24h_value", "false")))
     top_by_24h = str(top_by_24h_env).lower() in ("1", "true", "yes")
 
+    watchlist_file = Path(__file__).resolve().parent / "data" / "watchlist.json"
+
     if symbols_override and isinstance(symbols_override, list) and len(symbols_override) > 0:
         symbol_universe = symbols_override
     else:
@@ -282,6 +284,22 @@ async def main(config_path=None):
     try:
         watch_count = len(symbol_universe) if isinstance(symbol_universe, list) else 0
         if isinstance(symbol_universe, list):
+            os.environ["WATCHLIST_SYMBOLS"] = ",".join(symbol_universe)
+            try:
+                watchlist_file.parent.mkdir(parents=True, exist_ok=True)
+                watchlist_file.write_text(
+                    json.dumps(
+                        {
+                            "symbols": symbol_universe,
+                            "updated": datetime.utcnow().isoformat()
+                        },
+                        ensure_ascii=False,
+                        indent=2
+                    ),
+                    encoding="utf-8"
+                )
+            except Exception:
+                pass
             if watch_count <= 30:
                 names = ", ".join(symbol_universe)
                 print(f"👀 현재 top {watch_count} 코인 주시 중입니다: {names}")
@@ -503,4 +521,3 @@ if __name__ == "__main__":
             pass
     else:
         asyncio.run(main(config_path))
-

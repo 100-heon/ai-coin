@@ -1,13 +1,29 @@
 import json
+import os
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import os
+
 import requests
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 AGENT_DATA_DIR = REPO_ROOT / "data" / "agent_data"
+WATCHLIST_FILE = REPO_ROOT / "data" / "watchlist.json"
 UPBIT_API_BASE = os.environ.get("UPBIT_API_BASE", "https://api.upbit.com")
 QUOTE_CCY = os.environ.get("UPBIT_QUOTE", "KRW").upper()
+CACHE_TTL = float(os.environ.get("API_CACHE_TTL", "5"))
+_CACHE: Dict[str, tuple[float, Any]] = {}
+
+
+def _cached(key: str, loader, ttl: Optional[float] = None):
+    ttl = ttl if ttl is not None else CACHE_TTL
+    now = time.time()
+    hit = _CACHE.get(key)
+    if hit and now - hit[0] < ttl:
+        return hit[1]
+    value = loader()
+    _CACHE[key] = (now, value)
+    return value
 
 
 def list_signatures() -> List[str]:
@@ -38,15 +54,35 @@ def _jsonl_rows(path: Path) -> List[Dict[str, Any]]:
 
 def get_positions(signature: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
     path = AGENT_DATA_DIR / signature / "position" / "position.jsonl"
-    rows = _jsonl_rows(path)
+    rows = _cached(f"positions:{signature}", lambda: _jsonl_rows(path))
     if limit is not None and limit > 0:
-        return rows[-limit:]
-    return rows
+        return rows[-limit:].copy()
+    return rows.copy()
+
+
+def _load_watchlist_symbols() -> List[str]:
+    watch = os.environ.get("WATCHLIST_SYMBOLS")
+    if watch:
+        return [sym.strip() for sym in watch.split(",") if sym.strip()]
+    if WATCHLIST_FILE.exists():
+        try:
+            data = json.loads(WATCHLIST_FILE.read_text(encoding="utf-8"))
+            symbols = data.get("symbols")
+            if isinstance(symbols, list):
+                return [str(sym) for sym in symbols]
+        except Exception:
+            return []
+    return []
 
 
 def latest_position(signature: str) -> Optional[Dict[str, Any]]:
     rows = get_positions(signature, limit=1)
-    return rows[-1] if rows else None
+    latest = rows[-1] if rows else None
+    if latest:
+        watchlist = _load_watchlist_symbols()
+        if watchlist:
+            latest["watchlist"] = watchlist
+    return latest
 
 
 def get_metrics(signature: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -130,31 +166,37 @@ def _get_daily_close(symbol: str, date: str) -> float:
 
 def portfolio_timeseries(signature: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
     """Return equity timeseries using paper-trade position snapshots and Upbit public prices."""
-    rows = get_positions(signature, limit=limit)
-    series: List[Dict[str, Any]] = []
-    for row in rows:
-        date = row.get("date")
-        positions = row.get("positions", {}) or {}
-        cash = float(positions.get("CASH", 0.0) or 0.0)
-        equity = cash
-        for sym, qty in positions.items():
-            if sym == "CASH":
-                continue
-            try:
-                qty_val = float(qty or 0.0)
-            except Exception:
-                qty_val = 0.0
-            if qty_val <= 0:
-                continue
-            px = _get_daily_close(sym, date)
-            equity += qty_val * px
+
+    def _loader():
+        rows = get_positions(signature, limit=limit)
+        series: List[Dict[str, Any]] = []
+        for row in rows:
+            date = row.get("date")
+            positions = row.get("positions", {}) or {}
+            cash = float(positions.get("CASH", 0.0) or 0.0)
+            equity = cash
+            for sym, qty in positions.items():
+                if sym == "CASH":
+                    continue
+                try:
+                    qty_val = float(qty or 0.0)
+                except Exception:
+                    qty_val = 0.0
+                if qty_val <= 0:
+                    continue
+                px = _get_daily_close(sym, date)
+                equity += qty_val * px
         series.append({
             "date": date,
+            "timestamp": row.get("timestamp"),
             "equity": equity,
             "cash": cash,
             "realized_pnl": float(row.get("realized_pnl", 0.0) or 0.0),
         })
-    return series
+        return series
+
+    cache_key = f"portfolio:{signature}:{limit}"
+    return _cached(cache_key, _loader)
 
 
 def _ticker_batch(symbols: List[str]) -> Dict[str, float]:
@@ -187,32 +229,84 @@ def _ticker_batch(symbols: List[str]) -> Dict[str, float]:
 
 def holdings_with_prices(signature: str) -> Dict[str, Any]:
     """Return latest holdings with live prices and valuation."""
-    latest = latest_position(signature)
-    if not latest:
-        return {"holdings": [], "positions": {}, "avg_costs": {}, "realized_pnl": 0.0}
-    positions = latest.get("positions", {}) or {}
-    avg_costs = latest.get("avg_costs", {}) or {}
-    realized_pnl = float(latest.get("realized_pnl", 0.0) or 0.0)
-    coins = [sym for sym, qty in positions.items() if sym != "CASH" and (qty or 0) > 0]
-    tickers = _ticker_batch(coins)
 
-    holdings = []
-    for sym in coins:
-        qty = float(positions.get(sym, 0.0) or 0.0)
-        last_px = float(tickers.get(sym, 0.0) or 0.0)
-        avg = float(avg_costs.get(sym, 0.0) or 0.0)
-        value = qty * last_px
-        holdings.append({
-            "symbol": sym,
-            "quantity": qty,
-            "avg_cost": avg,
-            "last_price": last_px,
-            "value": value,
+    def _loader():
+        latest = latest_position(signature)
+        if not latest:
+            return {"holdings": [], "positions": {}, "avg_costs": {}, "realized_pnl": 0.0}
+        positions = latest.get("positions", {}) or {}
+        avg_costs = latest.get("avg_costs", {}) or {}
+        realized_pnl = float(latest.get("realized_pnl", 0.0) or 0.0)
+        coins = [sym for sym, qty in positions.items() if sym != "CASH" and (qty or 0) > 0]
+        tickers = _ticker_batch(coins)
+
+        holdings = []
+        for sym in coins:
+            qty = float(positions.get(sym, 0.0) or 0.0)
+            last_px = float(tickers.get(sym, 0.0) or 0.0)
+            avg = float(avg_costs.get(sym, 0.0) or 0.0)
+            value = qty * last_px
+            holdings.append({
+                "symbol": sym,
+                "quantity": qty,
+                "avg_cost": avg,
+                "last_price": last_px,
+                "value": value,
+            })
+
+        return {
+            "holdings": holdings,
+            "positions": positions,
+            "avg_costs": avg_costs,
+            "realized_pnl": realized_pnl,
+            "initial_cash": _get_initial_cash(signature),
+        }
+
+    return _cached(f"holdings:{signature}", _loader, ttl=3.0)
+
+
+def _get_initial_cash(signature: str) -> float:
+    try:
+        return float(os.environ.get("START_CASH_KRW", "100000000") or 100000000)
+    except Exception:
+        return 100000000.0
+
+
+def get_trade_actions(signature: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Return buy/sell actions with timestamp and fill data."""
+    rows = get_positions(signature)
+    actions: List[Dict[str, Any]] = []
+    for row in rows:
+        action = row.get("this_action") or {}
+        act_type = action.get("action")
+        if act_type not in ("buy", "sell"):
+            continue
+        symbol = action.get("symbol", "")
+        amount = action.get("amount")
+        fill_price = action.get("fill_price") or action.get("price")
+        timestamp = row.get("timestamp")
+
+        krw_delta: Optional[float] = None
+        if act_type == "buy":
+            val = action.get("krw_spent") or action.get("requested_krw")
+            if val is not None:
+                krw_delta = -abs(float(val))
+        else:  # sell
+            val = action.get("proceeds_krw") or action.get("price")
+            if val is not None:
+                krw_delta = abs(float(val))
+
+        actions.append({
+            "timestamp": timestamp,
+            "date": row.get("date"),
+            "id": row.get("id"),
+            "action": act_type,
+            "symbol": symbol,
+            "amount": amount,
+            "fill_price": fill_price,
+            "krw_delta": krw_delta,
         })
 
-    return {
-        "holdings": holdings,
-        "positions": positions,
-        "avg_costs": avg_costs,
-        "realized_pnl": realized_pnl,
-    }
+    if limit and limit > 0:
+        return actions[-limit:]
+    return actions

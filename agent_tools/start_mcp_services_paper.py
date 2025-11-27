@@ -67,7 +67,7 @@ class MCPServiceManager:
         sys.exit(0)
 
     def start_service(self, service_id, config):
-        script_path = config['script']
+        script_path = Path(__file__).parent / config['script']
         service_name = config['name']
         port = config['port']
 

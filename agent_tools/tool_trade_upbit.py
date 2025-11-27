@@ -7,6 +7,7 @@ import uuid
 import time
 import json
 import hashlib
+from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
 from typing import Dict, Any, Tuple, Optional
 
@@ -166,6 +167,7 @@ def _write_position_snapshot(
     _, _, _, last_id = _read_last_ext(signature)
     record = {
         "date": today_date,
+        "timestamp": _current_timestamp_kst(),
         "id": last_id + 1,
         "this_action": this_action,
         "positions": positions,
@@ -178,6 +180,11 @@ def _write_position_snapshot(
     with open(position_file_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
     return record
+
+
+def _current_timestamp_kst() -> str:
+    kst = timezone(timedelta(hours=9))
+    return datetime.now(tz=kst).strftime("%Y-%m-%dT%H:%M:%S")
 
 
 @mcp.tool()
@@ -453,4 +460,3 @@ def get_balance() -> Dict[str, Any]:
 if __name__ == "__main__":
     port = int(os.getenv("TRADE_HTTP_PORT", "8002"))
     mcp.run(transport="streamable-http", port=port)
-
